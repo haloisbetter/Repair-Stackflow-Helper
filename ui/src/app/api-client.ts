@@ -23,10 +23,69 @@ export interface HealthSummary {
   latencyMs: number | null;
 }
 
+export interface AssistantProfile {
+  name: string;
+  subtitle: string;
+  welcomeMessage: string;
+  avatar: { type: "initials"; value: string };
+  appearance: { accentColor: string };
+  profileVersion: number;
+}
+
+export interface InstructionProfile {
+  globalInstructions: string;
+  toneRules: string[];
+  formattingRules: string[];
+  prohibitedClaims: string[];
+  escalationRules: string[];
+  profileVersion: number;
+}
+
+export interface RuntimeAssistantConfiguration {
+  assistant: AssistantProfile;
+  instructions: InstructionProfile;
+  enabledTools: string[];
+  modelRole: "drafting" | "extraction" | "reasoning" | "fast";
+  organizationId?: string;
+  compiledAt: string;
+}
+
+export interface ToolDefinition {
+  toolId: string;
+  displayName: string;
+  description: string;
+  category: string;
+  executionLocation: "local" | "repair_stackflow" | "hybrid";
+  riskLevel: "low" | "medium" | "high";
+  implemented: boolean;
+}
+
+export interface ToolPolicy {
+  organizationId: string;
+  toolId: string;
+  enabled: boolean;
+  allowedRoles: string[];
+  requiresConfirmation: boolean;
+  executionLocation: "local" | "repair_stackflow" | "hybrid";
+}
+
+export interface ToolWithPolicy extends ToolDefinition {
+  policy: ToolPolicy | null;
+}
+
+export interface AuthorizationDecision {
+  authorized: boolean;
+  errorCode?: string;
+  reason?: string;
+}
+
 export interface BootstrapResponse {
   identity: Identity;
   config: ConfigSummary;
   health: HealthSummary | null;
+  assistant: AssistantProfile;
+  runtimeConfig: RuntimeAssistantConfiguration;
+  enabledTools: string[];
   lastPairing: { organizationId: string; locationName: string } | null;
 }
 
@@ -179,5 +238,31 @@ export const api = {
       method: "POST",
       body: JSON.stringify(config)
     }),
-  diagnostics: () => request<unknown>("/api/v1/diagnostics")
+  diagnostics: () => request<unknown>("/api/v1/diagnostics"),
+  getAssistantProfile: () => request<AssistantProfile>("/api/v1/assistant/profile"),
+  updateAssistantProfile: (profile: AssistantProfile) =>
+    request<AssistantProfile>("/api/v1/assistant/profile", {
+      method: "PUT",
+      body: JSON.stringify(profile)
+    }),
+  getInstructionProfile: () => request<InstructionProfile>("/api/v1/assistant/instructions"),
+  updateInstructionProfile: (profile: InstructionProfile) =>
+    request<InstructionProfile>("/api/v1/assistant/instructions", {
+      method: "PUT",
+      body: JSON.stringify(profile)
+    }),
+  resetAssistantProfile: () =>
+    request<{ reset: boolean }>("/api/v1/assistant/reset", { method: "POST" }),
+  getRuntimeConfig: () => request<RuntimeAssistantConfiguration>("/api/v1/assistant/runtime"),
+  listTools: () => request<{ tools: ToolWithPolicy[] }>("/api/v1/tools"),
+  updateToolPolicy: (toolId: string, policy: Partial<ToolPolicy>) =>
+    request<ToolPolicy>(`/api/v1/tools/${encodeURIComponent(toolId)}/policy`, {
+      method: "PUT",
+      body: JSON.stringify(policy)
+    }),
+  authorizeTool: (toolId: string, confirmationProvided: boolean) =>
+    request<AuthorizationDecision>(`/api/v1/tools/${encodeURIComponent(toolId)}/authorize`, {
+      method: "POST",
+      body: JSON.stringify({ confirmationProvided })
+    })
 };

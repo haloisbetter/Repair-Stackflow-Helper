@@ -12,6 +12,11 @@ import { TemporaryJobStore } from "./temporary-job-store.js";
 import { validateJobRequest, assertNoArbitraryPromptFields } from "./job-validator.js";
 import { normalizeOutput } from "../tasks/format-technician-note/formatter.js";
 import { validateStructuredOutput } from "../tasks/format-technician-note/response-validator.js";
+import type { ToolRegistry } from "../tools/tool-registry.js";
+import type { ToolPolicy, AuthorizationDecision } from "../tools/tool-authorization-service.js";
+import { authorizeToolUse } from "../tools/tool-authorization-service.js";
+import type { AssistantProfileService } from "../assistant/assistant-profile-service.js";
+import { composePrompt, composeInstructionBlock } from "../assistant/prompt-composer.js";
 
 export interface JobRunnerDeps {
   identity: HelperIdentity;
@@ -19,6 +24,10 @@ export interface JobRunnerDeps {
   provider: AIProvider;
   taskRegistry: TaskRegistry;
   store: TemporaryJobStore;
+  toolRegistry: ToolRegistry;
+  enabledTools: () => readonly string[];
+  getToolPolicy: (toolId: string) => ToolPolicy | null;
+  assistantProfileService: AssistantProfileService;
   now?: () => Date;
 }
 
@@ -40,7 +49,7 @@ export class JobRunner {
   constructor(private readonly deps: JobRunnerDeps) {}
 
   async run(input: RunJobInput): Promise<JobRunnerResult> {
-    const { identity, config, provider, taskRegistry, store } = this.deps;
+    const { identity, config, provider, taskRegistry, store, toolRegistry, assistantProfileService } = this.deps;
     const now = this.deps.now ?? (() => new Date());
 
     if (!isPaired(identity)) {
@@ -54,6 +63,28 @@ export class JobRunner {
     const job = validateJobRequest(input.rawJob, { identity, config });
 
     const entry = taskRegistry.resolve(job.task);
+
+    // Tool authorization check
+    const policy = this.deps.getToolPolicy(job.task);
+    if (!policy) {
+      throw new ProtocolError("tool_disabled_by_policy", `No tool policy for task '${job.task}'.`, false);
+    }
+    const decision: AuthorizationDecision = authorizeToolUse({
+      toolId: job.task,
+      role: identity.role as "workstation_agent" | "ai_host" | "combined",
+      toolRegistry,
+      enabledTools: this.deps.enabledTools(),
+      policy,
+      confirmationProvided: true
+    });
+    if (!decision.authorized) {
+      throw new ProtocolError(
+        decision.errorCode ?? "tool_not_authorized",
+        decision.reason ?? `Tool authorization denied for '${job.task}'.`,
+        false
+      );
+    }
+
     store.beginJob({
       jobId: job.jobId,
       requestId: job.requestId,
@@ -77,9 +108,17 @@ export class JobRunner {
       }
 
       const userPrompt = entry.template.renderUserPrompt(job.input);
+      const instructions = assistantProfileService.getInstructionProfile();
+      const composedSystemPrompt = composePrompt({
+        platformSafety: "You are running in a sandboxed repair-shop assistant. Do not execute code, access the filesystem, or make network requests.",
+        trustedTask: entry.template.systemPrompt,
+        organizationInstructions: composeInstructionBlock(instructions),
+        untrustedInput: userPrompt,
+        outputSchema: "Return ONLY a single JSON object with fields: formattedNote, customerReportedIssue, technicianFindings, recommendedNextStep, warnings."
+      });
       const execReq: ApprovedAIExecutionRequest = {
         task: "format_technician_note",
-        systemPrompt: entry.template.systemPrompt,
+        systemPrompt: composedSystemPrompt,
         userPrompt,
         model: config.approvedModel,
         maxResponseBytes: config.maxResponseBytes,

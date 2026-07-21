@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Modal } from "./Modal.js";
-import type { DeveloperStatus } from "../../app/api-client.js";
+import type { DeveloperStatus, BootstrapResponse } from "../../app/api-client.js";
 import { api } from "../../app/api-client.js";
 
 interface Props {
   status: DeveloperStatus | null;
+  bootstrap?: BootstrapResponse | null;
   onClose: () => void;
   onRefresh: () => void;
 }
@@ -28,7 +29,7 @@ function Row({ label, value }: { label: string; value: string | number | null })
   );
 }
 
-export function DeveloperModal({ status, onClose, onRefresh }: Props) {
+export function DeveloperModal({ status, bootstrap, onClose, onRefresh }: Props) {
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
 
   const handleCopyDiagnostics = async () => {
@@ -128,6 +129,33 @@ export function DeveloperModal({ status, onClose, onRefresh }: Props) {
             Simulation controls are available in development mode only.
             Technician-note content is never shown in developer diagnostics.
           </p>
+        </Section>
+
+        <Section title="Assistant Profile">
+          <Row label="Name" value={bootstrap?.assistant?.name ?? null} />
+          <Row label="Subtitle" value={bootstrap?.assistant?.subtitle ?? null} />
+          <Row label="Profile version" value={String(bootstrap?.assistant?.profileVersion ?? "—")} />
+          <Row label="Avatar" value={bootstrap?.assistant?.avatar?.value ?? null} />
+          <Row label="Accent color" value={bootstrap?.assistant?.appearance?.accentColor ?? null} />
+        </Section>
+
+        <Section title="Instruction Profile">
+          <Row label="Profile version" value={String(bootstrap?.runtimeConfig?.instructions?.profileVersion ?? "—")} />
+          <Row label="Tone rules" value={String(bootstrap?.runtimeConfig?.instructions?.toneRules?.length ?? 0)} />
+          <Row label="Formatting rules" value={String(bootstrap?.runtimeConfig?.instructions?.formattingRules?.length ?? 0)} />
+          <Row label="Prohibited claims" value={String(bootstrap?.runtimeConfig?.instructions?.prohibitedClaims?.length ?? 0)} />
+          <Row label="Escalation rules" value={String(bootstrap?.runtimeConfig?.instructions?.escalationRules?.length ?? 0)} />
+        </Section>
+
+        <Section title="Tool Runtime">
+          <Row label="Enabled tools" value={bootstrap?.runtimeConfig?.enabledTools?.join(", ") ?? null} />
+          <Row label="Model role" value={bootstrap?.runtimeConfig?.modelRole ?? null} />
+          <Row label="Compiled at" value={bootstrap?.runtimeConfig?.compiledAt ?? null} />
+        </Section>
+
+        <Section title="Runtime Configuration">
+          <Row label="Organization ID" value={bootstrap?.runtimeConfig?.organizationId ?? null} />
+          <Row label="Welcome message" value={bootstrap?.assistant?.welcomeMessage ?? null} />
         </Section>
       </div>
     </Modal>

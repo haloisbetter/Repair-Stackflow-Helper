@@ -7,11 +7,34 @@ import { TemporaryJobStore } from "../../src/jobs/temporary-job-store.js";
 import { JobRunner } from "../../src/jobs/job-runner.js";
 import { ProtocolError } from "../../src/contracts/v1/errors.js";
 import { makeIdentity, makeConfig, makeValidJob } from "../helpers/fixtures.js";
+import { toolRegistry } from "../../src/tools/tool-registry.js";
+import { createDefaultAssistantProfileService } from "../../src/assistant/assistant-profile-service.js";
+import type { ToolPolicy } from "../../src/tools/tool-authorization-service.js";
+
+const defaultPolicy: ToolPolicy = {
+  organizationId: "dev",
+  toolId: "format_technician_note",
+  enabled: true,
+  allowedRoles: ["workstation_agent", "ai_host", "combined"],
+  requiresConfirmation: false,
+  executionLocation: "local"
+};
 
 function makeRunner(provider: MockAIProvider | OllamaProvider, identity = makeIdentity(), config = makeConfig()) {
   const store = new TemporaryJobStore();
-  const registry = new TaskRegistry(new Map([["format_technician_note", formatTechnicianNoteTemplate]]));
-  const runner = new JobRunner({ identity, config, provider, taskRegistry: registry, store });
+  const registry = new TaskRegistry(new Map([["format_technician_note", formatTechnicianNoteTemplate]]), toolRegistry);
+  const assistantProfileService = createDefaultAssistantProfileService();
+  const runner = new JobRunner({
+    identity,
+    config,
+    provider,
+    taskRegistry: registry,
+    store,
+    toolRegistry,
+    enabledTools: () => ["format_technician_note"],
+    getToolPolicy: (toolId: string) => (toolId === "format_technician_note" ? defaultPolicy : null),
+    assistantProfileService
+  });
   return { runner, store, registry };
 }
 
@@ -146,8 +169,19 @@ describe("temporary storage", () => {
     const mock = new MockAIProvider();
     const identity = makeIdentity();
     const config = makeConfig();
-    const registry = new TaskRegistry(new Map([["format_technician_note", formatTechnicianNoteTemplate]]));
-    const runner = new JobRunner({ identity, config, provider: mock, taskRegistry: registry, store });
+    const registry = new TaskRegistry(new Map([["format_technician_note", formatTechnicianNoteTemplate]]), toolRegistry);
+    const assistantProfileService = createDefaultAssistantProfileService();
+    const runner = new JobRunner({
+      identity,
+      config,
+      provider: mock,
+      taskRegistry: registry,
+      store,
+      toolRegistry,
+      enabledTools: () => ["format_technician_note"],
+      getToolPolicy: (toolId: string) => (toolId === "format_technician_note" ? defaultPolicy : null),
+      assistantProfileService
+    });
     const job = makeValidJob({ assignedHelperId: identity.helperId });
     const outcome = await runner.run({ rawJob: job });
     expect(outcome.result).toBeDefined();

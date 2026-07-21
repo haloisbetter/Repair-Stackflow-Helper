@@ -19,6 +19,15 @@ import { DeveloperModal } from "./components/Modals/DeveloperModal.js";
 import { ConfirmationModal } from "./components/Modals/ConfirmationModal.js";
 import { AboutModal } from "./components/Modals/AboutModal.js";
 
+function deriveChips(enabledTools: string[]): string[] {
+  const chips: string[] = [];
+  if (enabledTools.includes("format_technician_note")) {
+    chips.push("Format note");
+  }
+  chips.push("Test AI", "Status", "Clear");
+  return chips;
+}
+
 type ModalType = "settings" | "developer" | "about" | "confirm-mock" | null;
 
 export default function App() {
@@ -53,7 +62,9 @@ export default function App() {
   useEffect(() => {
     if (!bootstrap) return;
     let s = createInitialState();
-    s = addWelcomeMessage(s);
+    const welcome = bootstrap.assistant?.welcomeMessage ?? "Ready to help with today's repairs.";
+    const chips = deriveChips(bootstrap.enabledTools ?? ["format_technician_note"]);
+    s = addWelcomeMessage(s, welcome, chips);
     if (bootstrap.config.providerSelection === "mock") {
       s = addWarningCard(
         s,
@@ -62,7 +73,7 @@ export default function App() {
       );
     }
     setConversation(s);
-  }, [bootstrap?.identity.pairingState, bootstrap?.config.providerSelection]);
+  }, [bootstrap?.identity.pairingState, bootstrap?.config.providerSelection, bootstrap?.assistant?.profileVersion, bootstrap?.enabledTools]);
 
   const handleCopy = useCallback((text: string, label: string) => {
     void navigator.clipboard.writeText(text).then(() => {
@@ -154,10 +165,11 @@ export default function App() {
   }, []);
 
   return (
-    <div className="companion-window" role="application" aria-label="Repair StackFlow Helper">
+    <div className="companion-window" role="application" aria-label={bootstrap?.assistant?.name ?? "Repair StackFlow Helper"}>
       <CompactHeader
         health={bootstrap?.health ?? null}
         config={bootstrap?.config ?? null}
+        assistant={bootstrap?.assistant ?? null}
         onMenuSelect={handleMenuSelect}
       />
       <main className="companion-main">
@@ -185,6 +197,7 @@ export default function App() {
       {activeModal === "developer" && (
         <DeveloperModal
           status={devStatus}
+          bootstrap={bootstrap}
           onClose={handleModalClose}
           onRefresh={refreshDevStatus}
         />

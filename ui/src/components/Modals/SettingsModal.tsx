@@ -2,6 +2,9 @@ import { useState } from "react";
 import { Modal } from "./Modal.js";
 import type { BootstrapResponse } from "../../app/api-client.js";
 import { api } from "../../app/api-client.js";
+import { AssistantProfileSettings } from "./AssistantProfileSettings.js";
+import { InstructionProfileSettings } from "./InstructionProfileSettings.js";
+import { ToolSettings } from "./ToolSettings.js";
 
 interface Props {
   bootstrap: BootstrapResponse | null;
@@ -86,6 +89,10 @@ export function SettingsModal({ bootstrap, onClose, onRefresh }: Props) {
         </p>
         <button className="settings-btn" onClick={async () => { await api.clear(); onRefresh(); }}>Clear Temporary Data</button>
       </div>
+
+      <AssistantProfileSettings runtime={bootstrap?.runtimeConfig ?? null} onRefresh={onRefresh} />
+      <InstructionProfileSettings runtime={bootstrap?.runtimeConfig ?? null} onRefresh={onRefresh} />
+      <ToolSettings onRefresh={onRefresh} />
 
       {message && <div className="settings-message">{message}</div>}
     </Modal>

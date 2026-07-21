@@ -55,6 +55,9 @@ export function registerConversationRoutes(app: FastifyInstance, ctx: HelperCont
             latencyMs: health.latencyMs
           }
         : null,
+      assistant: ctx.getAssistantProfile(),
+      runtimeConfig: ctx.getRuntimeConfig(),
+      enabledTools: ctx.getRuntimeConfig().enabledTools,
       lastPairing: ctx.lastPairing
         ? { organizationId: ctx.lastPairing.organizationId, locationName: ctx.lastPairing.locationName }
         : null

@@ -47,17 +47,17 @@ export function createInitialState(): ConversationState {
   };
 }
 
-export function addWelcomeMessage(state: ConversationState): ConversationState {
+export function addWelcomeMessage(state: ConversationState, welcomeMessage?: string, chips?: string[]): ConversationState {
   const welcome: ConversationItem = {
     id: nextId(),
     type: "helper-message",
-    content: "Ready to help with technician notes.",
+    content: welcomeMessage ?? "Ready to help with today's repairs.",
     timestamp: Date.now()
   };
   const status: ConversationItem = {
     id: nextId(),
     type: "action-chips",
-    chips: ["Format note", "Test AI", "Status", "Clear"],
+    chips: chips ?? ["Format note", "Test AI", "Status", "Clear"],
     timestamp: Date.now() + 1
   };
   return { ...state, items: [...state.items, welcome, status] };

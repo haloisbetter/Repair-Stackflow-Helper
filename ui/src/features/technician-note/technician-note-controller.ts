@@ -124,7 +124,15 @@ export async function handleIntent(
         // Non-fatal: local clear still works
       }
       let s = clearConversation(state);
-      s = addWelcomeMessage(s);
+      s = addWelcomeMessage(
+        s,
+        bootstrap?.assistant?.welcomeMessage,
+        bootstrap?.enabledTools
+          ? bootstrap.enabledTools.includes("format_technician_note")
+            ? ["Format note", "Test AI", "Status", "Clear"]
+            : ["Test AI", "Status", "Clear"]
+          : undefined
+      );
       return { state: s };
     }
 
@@ -134,7 +142,15 @@ export async function handleIntent(
 
     case "welcome":
     default: {
-      let s = addWelcomeMessage(state);
+      let s = addWelcomeMessage(
+        state,
+        bootstrap?.assistant?.welcomeMessage,
+        bootstrap?.enabledTools
+          ? bootstrap.enabledTools.includes("format_technician_note")
+            ? ["Format note", "Test AI", "Status", "Clear"]
+            : ["Test AI", "Status", "Clear"]
+          : undefined
+      );
       if (bootstrap?.config.providerSelection === "mock") {
         s = addWarningCard(
           s,

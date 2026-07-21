@@ -15,6 +15,14 @@ import { TemporaryJobStore } from "./jobs/temporary-job-store.js";
 import { JobRunner } from "./jobs/job-runner.js";
 import { DiagnosticService } from "./diagnostics/diagnostic-service.js";
 import { ProtocolError } from "./contracts/v1/errors.js";
+import { ToolRegistry, toolRegistry } from "./tools/tool-registry.js";
+import { AssistantProfileService, createDefaultAssistantProfileService } from "./assistant/assistant-profile-service.js";
+import { AssistantProfileStore } from "./assistant/assistant-profile-store.js";
+import { type ToolPolicy, type ToolRole, type AuthorizationDecision } from "./tools/tool-authorization-service.js";
+import { authorizeToolUse } from "./tools/tool-authorization-service.js";
+import { DEFAULT_ENABLED_TOOLS, type RuntimeAssistantConfiguration } from "./assistant/runtime-assistant-config.js";
+import { type AssistantProfile } from "./assistant/assistant-profile.js";
+import { type InstructionProfile } from "./assistant/instruction-profile.js";
 
 export interface HelperContext {
   config: HelperConfig;
@@ -27,6 +35,8 @@ export interface HelperContext {
   store: TemporaryJobStore;
   jobRunner: JobRunner;
   diagnostics: DiagnosticService;
+  assistantProfileService: AssistantProfileService;
+  toolRegistry: ToolRegistry;
   lastHealth: HelperHealth | null;
   lastPairing: PairingResult | null;
   setConfig(next: Partial<HelperConfig>): void;
@@ -38,6 +48,19 @@ export interface HelperContext {
   getIdentity(): HelperIdentity;
   getConfig(): HelperConfig;
   getStore(): TemporaryJobStore;
+  getAssistantProfile(): AssistantProfile;
+  getInstructionProfile(): InstructionProfile;
+  updateAssistantProfile(input: unknown): AssistantProfile;
+  updateInstructionProfile(input: unknown): InstructionProfile;
+  resetAssistantProfile(): void;
+  getRuntimeConfig(): RuntimeAssistantConfiguration;
+  listTools(): ReturnType<ToolRegistry["list"]>;
+  getToolPolicies(): ToolPolicy[];
+  updateToolPolicy(toolId: string, input: unknown): ToolPolicy;
+  authorizeTool(params: {
+    toolId: string;
+    confirmationProvided: boolean;
+  }): AuthorizationDecision;
 }
 
 export function createHelperContext(initialConfig: Partial<HelperConfig> = {}): HelperContext {
@@ -53,10 +76,38 @@ export function createHelperContext(initialConfig: Partial<HelperConfig> = {}): 
   let provider = selectProvider(providerSelection, ollamaProvider, mockProvider);
 
   let healthService = new HealthService(config, provider);
+  const assistantProfileStore = new AssistantProfileStore();
+  const assistantProfileService = createDefaultAssistantProfileService();
+  const tools = toolRegistry;
+  let toolPolicies: Map<string, ToolPolicy> = new Map([
+    [
+      "format_technician_note",
+      {
+        organizationId: identity.organizationId ?? "dev",
+        toolId: "format_technician_note",
+        enabled: true,
+        allowedRoles: ["workstation_agent", "ai_host", "combined"],
+        requiresConfirmation: false,
+        executionLocation: "local"
+      }
+    ]
+  ]);
+  let enabledTools: readonly string[] = Array.from(DEFAULT_ENABLED_TOOLS);
   const taskRegistry = new TaskRegistry(
-    new Map([["format_technician_note", formatTechnicianNoteTemplate]])
+    new Map([["format_technician_note", formatTechnicianNoteTemplate]]),
+    tools
   );
-  let jobRunner = new JobRunner({ identity, config, provider, taskRegistry, store });
+  let jobRunner = new JobRunner({
+    identity,
+    config,
+    provider,
+    taskRegistry,
+    store,
+    toolRegistry: tools,
+    enabledTools: () => enabledTools,
+    getToolPolicy: (toolId: string) => toolPolicies.get(toolId) ?? null,
+    assistantProfileService
+  });
   let diagnostics = new DiagnosticService(
     () => identity,
     () => config,
@@ -69,7 +120,17 @@ export function createHelperContext(initialConfig: Partial<HelperConfig> = {}): 
   function rebuild() {
     provider = selectProvider(providerSelection, ollamaProvider, mockProvider);
     healthService = new HealthService(config, provider);
-    jobRunner = new JobRunner({ identity, config, provider, taskRegistry, store });
+    jobRunner = new JobRunner({
+      identity,
+      config,
+      provider,
+      taskRegistry,
+      store,
+      toolRegistry: tools,
+      enabledTools: () => enabledTools,
+      getToolPolicy: (toolId: string) => toolPolicies.get(toolId) ?? null,
+      assistantProfileService
+    });
   }
 
   return {
@@ -83,6 +144,8 @@ export function createHelperContext(initialConfig: Partial<HelperConfig> = {}): 
     get store() { return store; },
     get jobRunner() { return jobRunner; },
     get diagnostics() { return diagnostics; },
+    get assistantProfileService() { return assistantProfileService; },
+    get toolRegistry() { return tools; },
     get lastHealth() { return lastHealth; },
     get lastPairing() { return lastPairing; },
     setConfig(next: Partial<HelperConfig>) {
@@ -141,7 +204,67 @@ export function createHelperContext(initialConfig: Partial<HelperConfig> = {}): 
     getHealth(): HelperHealth | null { return lastHealth; },
     getIdentity(): HelperIdentity { return identity; },
     getConfig(): HelperConfig { return config; },
-    getStore(): TemporaryJobStore { return store; }
+    getStore(): TemporaryJobStore { return store; },
+    getAssistantProfile(): AssistantProfile { return assistantProfileService.getAssistantProfile(); },
+    getInstructionProfile(): InstructionProfile { return assistantProfileService.getInstructionProfile(); },
+    updateAssistantProfile(input: unknown): AssistantProfile {
+      const updated = assistantProfileService.updateAssistantProfile(input);
+      rebuild();
+      return updated;
+    },
+    updateInstructionProfile(input: unknown): InstructionProfile {
+      const updated = assistantProfileService.updateInstructionProfile(input);
+      rebuild();
+      return updated;
+    },
+    resetAssistantProfile(): void {
+      assistantProfileService.reset();
+      enabledTools = Array.from(DEFAULT_ENABLED_TOOLS);
+      rebuild();
+    },
+    getRuntimeConfig(): RuntimeAssistantConfiguration {
+      const params: { enabledTools: readonly string[]; organizationId?: string } = { enabledTools };
+      if (identity.organizationId) params.organizationId = identity.organizationId;
+      return assistantProfileService.compileRuntimeConfig(params);
+    },
+    listTools(): ReturnType<ToolRegistry["list"]> { return tools.list(); },
+    getToolPolicies(): ToolPolicy[] { return Array.from(toolPolicies.values()); },
+    updateToolPolicy(toolId: string, input: unknown): ToolPolicy {
+      const tool = tools.resolve(toolId);
+      if (!tool) throw new ProtocolError("tool_disabled_by_policy", `Unknown tool: ${toolId}`, false);
+      const base = toolPolicies.get(toolId);
+      const execLoc = (input as { executionLocation?: string })?.executionLocation ?? base?.executionLocation ?? tool.executionLocation;
+      const merged: ToolPolicy = {
+        organizationId: identity.organizationId ?? "dev",
+        toolId,
+        enabled: (input as { enabled?: boolean })?.enabled ?? base?.enabled ?? false,
+        allowedRoles: (input as { allowedRoles?: ToolRole[] })?.allowedRoles ?? base?.allowedRoles ?? [],
+        requiresConfirmation: (input as { requiresConfirmation?: boolean })?.requiresConfirmation ?? base?.requiresConfirmation ?? false,
+        executionLocation: execLoc as "local" | "repair_stackflow" | "hybrid"
+      };
+      toolPolicies.set(toolId, merged);
+      if (merged.enabled && !enabledTools.includes(toolId)) {
+        enabledTools = [...enabledTools, toolId];
+      } else if (!merged.enabled) {
+        enabledTools = enabledTools.filter((t) => t !== toolId);
+      }
+      rebuild();
+      return merged;
+    },
+    authorizeTool(params: { toolId: string; confirmationProvided: boolean }): AuthorizationDecision {
+      const policy = toolPolicies.get(params.toolId);
+      if (!policy) {
+        return { authorized: false, errorCode: "tool_disabled_by_policy", reason: `No policy for ${params.toolId}` };
+      }
+      return authorizeToolUse({
+        toolId: params.toolId,
+        role: identity.role as ToolRole,
+        toolRegistry: tools,
+        enabledTools,
+        policy,
+        confirmationProvided: params.confirmationProvided
+      });
+    }
   };
 }
 

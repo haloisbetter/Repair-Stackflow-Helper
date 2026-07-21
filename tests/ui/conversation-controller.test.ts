@@ -31,6 +31,36 @@ const mockBootstrap: BootstrapResponse = {
     modelAvailable: true,
     latencyMs: 0
   },
+  assistant: {
+    name: "Helper",
+    subtitle: "Repair Assistant",
+    welcomeMessage: "Ready to help with today's repairs.",
+    avatar: { type: "initials", value: "H" },
+    appearance: { accentColor: "#2f8f83" },
+    profileVersion: 1
+  },
+  runtimeConfig: {
+    assistant: {
+      name: "Helper",
+      subtitle: "Repair Assistant",
+      welcomeMessage: "Ready to help with today's repairs.",
+      avatar: { type: "initials", value: "H" },
+      appearance: { accentColor: "#2f8f83" },
+      profileVersion: 1
+    },
+    instructions: {
+      globalInstructions: "You are a repair-shop assistant.",
+      toneRules: [],
+      formattingRules: [],
+      prohibitedClaims: [],
+      escalationRules: [],
+      profileVersion: 1
+    },
+    enabledTools: ["format_technician_note"],
+    modelRole: "drafting",
+    compiledAt: "2026-01-01T00:00:00Z"
+  },
+  enabledTools: ["format_technician_note"],
   lastPairing: { organizationId: "computer-concepts-dev", locationName: "Yorktown" }
 };
 

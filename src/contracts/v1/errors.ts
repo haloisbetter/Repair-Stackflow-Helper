@@ -26,6 +26,14 @@ export const ErrorCode = z.enum([
   "active_job_conflict",
   "not_configured",
   "arbitrary_prompt_rejected",
+  "tool_not_found",
+  "tool_not_implemented",
+  "tool_not_in_profile",
+  "tool_disabled_by_policy",
+  "tool_role_not_allowed",
+  "tool_location_not_supported",
+  "tool_confirmation_required",
+  "tool_not_authorized",
   "internal_error"
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;

@@ -2,15 +2,21 @@ import { ProtocolError } from "../contracts/v1/errors.js";
 import type { ApprovedTask } from "../contracts/v1/common.js";
 import { isApproved, isEnabled, ENABLED_TASKS } from "./approved-task.js";
 import type { TaskTemplate } from "./format-technician-note/prompt-template.js";
+import type { ToolRegistry } from "../tools/tool-registry.js";
 
 export interface TaskRegistryEntry {
   task: ApprovedTask;
   enabled: boolean;
   template: TaskTemplate;
+  toolId: string;
+  implemented: boolean;
 }
 
 export class TaskRegistry {
-  constructor(private readonly templates: Map<ApprovedTask, TaskTemplate>) {}
+  constructor(
+    private readonly templates: Map<ApprovedTask, TaskTemplate>,
+    private readonly toolRegistry?: ToolRegistry
+  ) {}
 
   resolve(task: string): TaskRegistryEntry {
     if (!isApproved(task)) {
@@ -24,7 +30,14 @@ export class TaskRegistry {
     if (!template) {
       throw new ProtocolError("task_not_enabled", `No template registered for '${approved}'.`, false);
     }
-    return { task: approved, enabled: true, template };
+    const tool = this.toolRegistry?.resolve(approved);
+    return {
+      task: approved,
+      enabled: true,
+      template,
+      toolId: approved,
+      implemented: tool?.implemented ?? true
+    };
   }
 
   listEnabled(): ApprovedTask[] {
