@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": ["node", "vitest/globals"],
+    "baseUrl": ".",
+    "paths": {
+      "@server/*": ["src/*"],
+      "@ui/*": ["ui/*"]
+    }
+  },
+  "include": ["src", "ui", "tests"],
+  "exclude": ["node_modules", "dist"]
+}
