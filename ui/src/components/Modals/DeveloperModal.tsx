@@ -31,6 +31,7 @@ function Row({ label, value }: { label: string; value: string | number | null })
 
 export function DeveloperModal({ status, bootstrap, onClose, onRefresh }: Props) {
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
+  const [configMsg, setConfigMsg] = useState<string | null>(null);
 
   const handleCopyDiagnostics = async () => {
     try {
@@ -62,6 +63,47 @@ export function DeveloperModal({ status, bootstrap, onClose, onRefresh }: Props)
   const handleSelectOllama = async () => {
     await api.selectProvider("ollama");
     onRefresh();
+  };
+
+  const handleExport = async () => {
+    try {
+      const config = await api.exportConfiguration();
+      const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "helper-configuration.json";
+      a.click();
+      URL.revokeObjectURL(url);
+      setConfigMsg("Configuration exported.");
+      setTimeout(() => setConfigMsg(null), 3000);
+    } catch (e) {
+      setConfigMsg(e instanceof Error ? e.message : "Export failed.");
+    }
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      await api.importConfiguration(parsed);
+      setConfigMsg("Configuration imported successfully.");
+      onRefresh();
+    } catch (e) {
+      setConfigMsg(e instanceof Error ? e.message : "Import failed.");
+    }
+  };
+
+  const handleResetConfig = async () => {
+    try {
+      await api.resetConfiguration();
+      setConfigMsg("Configuration reset to safe defaults.");
+      onRefresh();
+    } catch (e) {
+      setConfigMsg(e instanceof Error ? e.message : "Reset failed.");
+    }
   };
 
   return (
@@ -129,6 +171,27 @@ export function DeveloperModal({ status, bootstrap, onClose, onRefresh }: Props)
             Simulation controls are available in development mode only.
             Technician-note content is never shown in developer diagnostics.
           </p>
+        </Section>
+
+        <Section title="Configuration" defaultOpen={true}>
+          <Row label="Configuration loaded" value={bootstrap?.configuration?.loaded ? "yes" : "no"} />
+          <Row label="Schema version" value={bootstrap?.configuration?.schemaVersion ?? "—"} />
+          <Row label="Source" value={bootstrap?.configuration?.source ?? "—"} />
+          <Row label="Last saved" value={bootstrap?.configuration?.lastSave ?? "—"} />
+          <Row label="Persistence healthy" value={bootstrap?.configuration?.persistenceHealthy ? "yes" : "no"} />
+          <Row label="Last error code" value={bootstrap?.configuration?.lastPersistenceErrorCode ?? "—"} />
+          {bootstrap?.configuration?.warning && (
+            <div className="dev-message dev-warning">{bootstrap.configuration.warning}</div>
+          )}
+          <div className="dev-controls">
+            <button className="dev-btn" onClick={handleExport}>Export Configuration</button>
+            <label className="dev-btn dev-import-btn">
+              Import Configuration
+              <input type="file" accept=".json,application/json" onChange={handleImportFile} style={{ display: "none" }} />
+            </label>
+            <button className="dev-btn" onClick={handleResetConfig}>Reset to Safe Defaults</button>
+          </div>
+          {configMsg && <div className="dev-message">{configMsg}</div>}
         </Section>
 
         <Section title="Assistant Profile">

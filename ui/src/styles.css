@@ -731,3 +731,22 @@ html, body { background: var(--bg); color: var(--text); font-family: var(--sans)
 }
 .tool-toggle input:checked + span { background: var(--accent-color); }
 .tool-toggle input:checked + span::after { transform: translateX(14px); }
+
+/* === Configuration Section === */
+.dev-import-btn {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.dev-message {
+  margin-top: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--accent-light);
+  border-radius: var(--radius-sm);
+}
+.dev-warning {
+  background: var(--warn-light);
+  color: var(--warn);
+}

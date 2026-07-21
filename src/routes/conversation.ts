@@ -58,6 +58,7 @@ export function registerConversationRoutes(app: FastifyInstance, ctx: HelperCont
       assistant: ctx.getAssistantProfile(),
       runtimeConfig: ctx.getRuntimeConfig(),
       enabledTools: ctx.getRuntimeConfig().enabledTools,
+      configuration: ctx.getConfigurationStatus(),
       lastPairing: ctx.lastPairing
         ? { organizationId: ctx.lastPairing.organizationId, locationName: ctx.lastPairing.locationName }
         : null
@@ -171,7 +172,8 @@ export function registerConversationRoutes(app: FastifyInstance, ctx: HelperCont
         failureCount: store.failureCount,
         lastErrorCode: diag.errorCode
       },
-      diagnostics: diag
+      diagnostics: diag,
+      configuration: ctx.getConfigurationStatus()
     });
   });
 
@@ -214,6 +216,7 @@ export function registerConversationRoutes(app: FastifyInstance, ctx: HelperCont
       });
     }
     ctx.setProviderSelection(parsed.data.provider);
+    await ctx.persistConfiguration();
     return reply.send({ selected: parsed.data.provider });
   });
 
@@ -234,6 +237,7 @@ export function registerConversationRoutes(app: FastifyInstance, ctx: HelperCont
       if (data.maxRequestBytes !== undefined) updates.maxRequestBytes = data.maxRequestBytes;
       if (data.maxResponseBytes !== undefined) updates.maxResponseBytes = data.maxResponseBytes;
       ctx.setConfig(updates);
+      await ctx.persistConfiguration();
       return reply.send({ updated: true, config: ctx.getConfig() });
     } catch (e) {
       return reply.status(400).send({

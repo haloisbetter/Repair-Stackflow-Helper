@@ -61,6 +61,15 @@ const mockBootstrap: BootstrapResponse = {
     compiledAt: "2026-01-01T00:00:00Z"
   },
   enabledTools: ["format_technician_note"],
+  configuration: {
+    loaded: false,
+    schemaVersion: null,
+    source: "defaults",
+    lastSave: null,
+    persistenceHealthy: true,
+    lastPersistenceErrorCode: null,
+    warning: null
+  },
   lastPairing: { organizationId: "computer-concepts-dev", locationName: "Yorktown" }
 };
 

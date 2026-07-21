@@ -79,6 +79,30 @@ export interface AuthorizationDecision {
   reason?: string;
 }
 
+export interface ConfigurationStatus {
+  loaded: boolean;
+  schemaVersion: string | null;
+  source: "active" | "backup" | "defaults";
+  lastSave: string | null;
+  persistenceHealthy: boolean;
+  lastPersistenceErrorCode: string | null;
+  warning: string | null;
+}
+
+export interface ExportedConfiguration {
+  schemaVersion: string;
+  savedAt: string;
+  assistantProfile: AssistantProfile;
+  instructionProfile: InstructionProfile;
+  toolPolicies: ToolPolicy[];
+  runtimePreferences: {
+    provider: string;
+    executionTarget: string;
+    modelRole: string;
+    ollamaEndpoint: string;
+  };
+}
+
 export interface BootstrapResponse {
   identity: Identity;
   config: ConfigSummary;
@@ -86,6 +110,7 @@ export interface BootstrapResponse {
   assistant: AssistantProfile;
   runtimeConfig: RuntimeAssistantConfiguration;
   enabledTools: string[];
+  configuration: ConfigurationStatus;
   lastPairing: { organizationId: string; locationName: string } | null;
 }
 
@@ -180,6 +205,12 @@ export interface DeveloperStatus {
     errorCode: string | null;
     appVersion: string;
     generatedAt: string;
+    configurationLoaded: boolean;
+    configurationSchemaVersion: string | null;
+    configurationSource: string;
+    lastConfigurationSave: string | null;
+    persistenceHealthy: boolean;
+    lastPersistenceErrorCode: string | null;
   };
 }
 
@@ -264,5 +295,16 @@ export const api = {
     request<AuthorizationDecision>(`/api/v1/tools/${encodeURIComponent(toolId)}/authorize`, {
       method: "POST",
       body: JSON.stringify({ confirmationProvided })
-    })
+    }),
+  exportConfiguration: () =>
+    request<ExportedConfiguration>("/api/v1/dev/configuration/export"),
+  importConfiguration: (config: ExportedConfiguration) =>
+    request<{ imported: boolean }>("/api/v1/dev/configuration/import", {
+      method: "POST",
+      body: JSON.stringify(config)
+    }),
+  resetConfiguration: () =>
+    request<{ reset: boolean }>("/api/v1/dev/configuration/reset", { method: "POST" }),
+  getConfigurationStatus: () =>
+    request<ConfigurationStatus>("/api/v1/dev/configuration/status")
 };

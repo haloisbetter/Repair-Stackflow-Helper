@@ -23,6 +23,28 @@ import { authorizeToolUse } from "./tools/tool-authorization-service.js";
 import { DEFAULT_ENABLED_TOOLS, type RuntimeAssistantConfiguration } from "./assistant/runtime-assistant-config.js";
 import { type AssistantProfile } from "./assistant/assistant-profile.js";
 import { type InstructionProfile } from "./assistant/instruction-profile.js";
+import {
+  type PersistedAssistantConfiguration,
+  type ExportedAssistantConfiguration,
+  CONFIG_SCHEMA_VERSION,
+  DEFAULT_RUNTIME_PREFERENCES
+} from "./config/persisted-configuration.js";
+import {
+  FileConfigurationStore,
+  type LocalConfigurationStore,
+  type ConfigurationSource,
+  type ConfigurationLoadResult
+} from "./config/local-configuration-store.js";
+
+export interface ConfigurationStatus {
+  loaded: boolean;
+  schemaVersion: string | null;
+  source: ConfigurationSource;
+  lastSave: string | null;
+  persistenceHealthy: boolean;
+  lastPersistenceErrorCode: string | null;
+  warning: string | null;
+}
 
 export interface HelperContext {
   config: HelperConfig;
@@ -37,6 +59,8 @@ export interface HelperContext {
   diagnostics: DiagnosticService;
   assistantProfileService: AssistantProfileService;
   toolRegistry: ToolRegistry;
+  configurationStore: LocalConfigurationStore;
+  configurationStatus: ConfigurationStatus;
   lastHealth: HelperHealth | null;
   lastPairing: PairingResult | null;
   setConfig(next: Partial<HelperConfig>): void;
@@ -61,9 +85,30 @@ export interface HelperContext {
     toolId: string;
     confirmationProvided: boolean;
   }): AuthorizationDecision;
+  loadConfiguration(): Promise<ConfigurationStatus>;
+  persistConfiguration(): Promise<void>;
+  exportConfiguration(): Promise<ExportedAssistantConfiguration>;
+  importConfiguration(input: unknown): Promise<void>;
+  resetConfiguration(): Promise<void>;
+  getConfigurationStatus(): ConfigurationStatus;
 }
 
-export function createHelperContext(initialConfig: Partial<HelperConfig> = {}): HelperContext {
+function buildDefaultConfigurationStatus(): ConfigurationStatus {
+  return {
+    loaded: false,
+    schemaVersion: null,
+    source: "defaults",
+    lastSave: null,
+    persistenceHealthy: true,
+    lastPersistenceErrorCode: null,
+    warning: null
+  };
+}
+
+export function createHelperContext(
+  initialConfig: Partial<HelperConfig> = {},
+  configStore?: LocalConfigurationStore
+): HelperContext {
   let config = normalizeConfig({ ...DEFAULT_CONFIG, ...initialConfig });
   const state = new StateMachine();
   let identity = createDevelopmentIdentity(config.helperRole);
@@ -112,10 +157,14 @@ export function createHelperContext(initialConfig: Partial<HelperConfig> = {}): 
     () => identity,
     () => config,
     () => lastHealth,
-    () => store
+    () => store,
+    () => configurationStatus
   );
   let lastHealth: HelperHealth | null = null;
   let lastPairing: PairingResult | null = null;
+
+  const configurationStore: LocalConfigurationStore = configStore ?? new FileConfigurationStore();
+  let configurationStatus: ConfigurationStatus = buildDefaultConfigurationStatus();
 
   function rebuild() {
     provider = selectProvider(providerSelection, ollamaProvider, mockProvider);
@@ -133,6 +182,62 @@ export function createHelperContext(initialConfig: Partial<HelperConfig> = {}): 
     });
   }
 
+  function buildPersistedConfiguration(): PersistedAssistantConfiguration {
+    return {
+      schemaVersion: CONFIG_SCHEMA_VERSION,
+      savedAt: new Date().toISOString(),
+      assistantProfile: assistantProfileService.getAssistantProfile(),
+      instructionProfile: assistantProfileService.getInstructionProfile(),
+      toolPolicies: Array.from(toolPolicies.values()),
+      runtimePreferences: {
+        provider: providerSelection,
+        executionTarget: config.executionTarget,
+        modelRole: "drafting",
+        ollamaEndpoint: config.ollamaEndpoint
+      }
+    };
+  }
+
+  function applyPersistedConfiguration(persisted: PersistedAssistantConfiguration): void {
+    assistantProfileService.updateAssistantProfile(persisted.assistantProfile);
+    assistantProfileService.updateInstructionProfile(persisted.instructionProfile);
+
+    toolPolicies = new Map();
+    enabledTools = [];
+    for (const policy of persisted.toolPolicies) {
+      toolPolicies.set(policy.toolId, policy);
+      if (policy.enabled) {
+        enabledTools = [...enabledTools, policy.toolId];
+      }
+    }
+
+    if (!toolPolicies.has("format_technician_note")) {
+      const defaultPolicy: ToolPolicy = {
+        organizationId: identity.organizationId ?? "dev",
+        toolId: "format_technician_note",
+        enabled: true,
+        allowedRoles: ["workstation_agent", "ai_host", "combined"],
+        requiresConfirmation: false,
+        executionLocation: "local"
+      };
+      toolPolicies.set("format_technician_note", defaultPolicy);
+      if (!enabledTools.includes("format_technician_note")) {
+        enabledTools = [...enabledTools, "format_technician_note"];
+      }
+    }
+
+    const prefs = persisted.runtimePreferences;
+    providerSelection = prefs.provider;
+    config = normalizeConfig({
+      ...config,
+      executionTarget: prefs.executionTarget,
+      ollamaEndpoint: prefs.ollamaEndpoint,
+      providerSelection: prefs.provider
+    });
+    ollamaProvider = new OllamaProvider({ endpoint: config.ollamaEndpoint });
+    rebuild();
+  }
+
   return {
     get config() { return config; },
     get identity() { return identity; },
@@ -146,6 +251,8 @@ export function createHelperContext(initialConfig: Partial<HelperConfig> = {}): 
     get diagnostics() { return diagnostics; },
     get assistantProfileService() { return assistantProfileService; },
     get toolRegistry() { return tools; },
+    get configurationStore() { return configurationStore; },
+    get configurationStatus() { return configurationStatus; },
     get lastHealth() { return lastHealth; },
     get lastPairing() { return lastPairing; },
     setConfig(next: Partial<HelperConfig>) {
@@ -264,14 +371,112 @@ export function createHelperContext(initialConfig: Partial<HelperConfig> = {}): 
         policy,
         confirmationProvided: params.confirmationProvided
       });
-    }
+    },
+    async loadConfiguration(): Promise<ConfigurationStatus> {
+      const result: ConfigurationLoadResult = await configurationStore.load();
+      if (result.configuration) {
+        applyPersistedConfiguration(result.configuration);
+        configurationStatus = {
+          loaded: true,
+          schemaVersion: result.configuration.schemaVersion,
+          source: result.source,
+          lastSave: result.configuration.savedAt,
+          persistenceHealthy: true,
+          lastPersistenceErrorCode: null,
+          warning: result.warning ?? null
+        };
+      } else {
+        configurationStatus = {
+          loaded: false,
+          schemaVersion: null,
+          source: "defaults",
+          lastSave: null,
+          persistenceHealthy: true,
+          lastPersistenceErrorCode: null,
+          warning: result.warning ?? null
+        };
+      }
+      return configurationStatus;
+    },
+    async persistConfiguration(): Promise<void> {
+      try {
+        const toSave = buildPersistedConfiguration();
+        await configurationStore.save(toSave);
+        configurationStatus = {
+          ...configurationStatus,
+          loaded: true,
+          schemaVersion: toSave.schemaVersion,
+          source: "active",
+          lastSave: toSave.savedAt,
+          persistenceHealthy: true,
+          lastPersistenceErrorCode: null
+        };
+      } catch (e) {
+        const code = e instanceof Error ? "configuration_write_failed" : "configuration_write_failed";
+        configurationStatus = {
+          ...configurationStatus,
+          persistenceHealthy: false,
+          lastPersistenceErrorCode: code
+        };
+        throw new ProtocolError("configuration_write_failed", "Failed to save configuration.", false);
+      }
+    },
+    async exportConfiguration(): Promise<ExportedAssistantConfiguration> {
+      return configurationStore.exportSanitized();
+    },
+    async importConfiguration(input: unknown): Promise<void> {
+      try {
+        const imported = await configurationStore.importConfiguration(input);
+        applyPersistedConfiguration(imported);
+        configurationStatus = {
+          loaded: true,
+          schemaVersion: imported.schemaVersion,
+          source: "active",
+          lastSave: imported.savedAt,
+          persistenceHealthy: true,
+          lastPersistenceErrorCode: null,
+          warning: null
+        };
+      } catch (e) {
+        configurationStatus = {
+          ...configurationStatus,
+          persistenceHealthy: false,
+          lastPersistenceErrorCode: "configuration_import_rejected"
+        };
+        const message = e instanceof Error ? e.message : "Import rejected.";
+        throw new ProtocolError("configuration_import_rejected", message, false);
+      }
+    },
+    async resetConfiguration(): Promise<void> {
+      await configurationStore.reset();
+      assistantProfileService.reset();
+      toolPolicies = new Map([
+        [
+          "format_technician_note",
+          {
+            organizationId: identity.organizationId ?? "dev",
+            toolId: "format_technician_note",
+            enabled: true,
+            allowedRoles: ["workstation_agent", "ai_host", "combined"],
+            requiresConfirmation: false,
+            executionLocation: "local"
+          }
+        ]
+      ]);
+      enabledTools = Array.from(DEFAULT_ENABLED_TOOLS);
+      config = normalizeConfig(DEFAULT_CONFIG);
+      providerSelection = config.providerSelection;
+      ollamaProvider = new OllamaProvider({ endpoint: config.ollamaEndpoint });
+      rebuild();
+      configurationStatus = buildDefaultConfigurationStatus();
+    },
+    getConfigurationStatus(): ConfigurationStatus { return configurationStatus; }
   };
 }
 
 function selectProvider(sel: ProviderSelection, ollama: AIProvider, mock: AIProvider): AIProvider {
   if (sel === "ollama") return ollama;
   if (sel === "mock") return mock;
-  // auto: prefer ollama; tests/dev can explicitly choose mock.
   return ollama;
 }
 

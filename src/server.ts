@@ -7,6 +7,17 @@ const startTime = Date.now();
 async function main(): Promise<void> {
   const env = loadEnvironment();
   const ctx = createHelperContext();
+
+  try {
+    const status = await ctx.loadConfiguration();
+    if (status.warning) {
+      console.warn(`Configuration warning: ${status.warning}`);
+    }
+    console.log(`Configuration loaded from: ${status.source}`);
+  } catch (e) {
+    console.warn(`Configuration load failed, using defaults: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   const app = createApp(ctx, startTime);
 
   try {

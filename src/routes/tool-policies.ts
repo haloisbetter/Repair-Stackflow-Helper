@@ -42,6 +42,7 @@ export function registerToolPolicyRoutes(app: FastifyInstance, ctx: HelperContex
     }
     try {
       const updated = ctx.updateToolPolicy(toolId, parsed.data);
+      await ctx.persistConfiguration();
       return reply.send(updated);
     } catch (e) {
       const err = e instanceof ProtocolError ? e : new ProtocolError("internal_error", "Failed to update tool policy.", false);

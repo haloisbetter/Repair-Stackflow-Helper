@@ -87,6 +87,18 @@ Open the menu (⋯) → Developer to see:
 - Job state (active/completed jobs, error codes)
 - Sanitized diagnostics (never contains note content)
 - Development controls (pair, unpair, select provider, reset state)
+- Configuration status (persistence health, source, last save)
+- Export, import, and reset configuration controls
+
+## Configuration Persistence
+
+Assistant profiles, instruction profiles, tool policies, and runtime preferences persist across restarts using a local JSON configuration file. See `docs/local-configuration.md` for full details.
+
+- Configuration is stored outside the repository in a platform-appropriate directory
+- Atomic writes with backup prevent data corruption
+- Invalid configurations fall back to safe defaults
+- Export and import are available through the Developer screen
+- No secrets, notes, or business content are ever persisted
 
 ## API Endpoints
 
@@ -104,6 +116,10 @@ POST /api/v1/dev/unpair                      — Unpair
 POST /api/v1/dev/provider/select             — Select AI provider
 POST /api/v1/dev/config                      — Update configuration
 GET  /api/v1/diagnostics                     — Sanitized diagnostics
+GET  /api/v1/dev/configuration/export        — Export configuration
+POST /api/v1/dev/configuration/import        — Import configuration
+POST /api/v1/dev/configuration/reset         — Reset to safe defaults
+GET  /api/v1/dev/configuration/status        — Persistence status
 ```
 
 All endpoints bind to `127.0.0.1` (loopback only).
@@ -116,14 +132,15 @@ npm run typecheck  # TypeScript type checking
 npm run build      # production build
 ```
 
-94 tests pass: 48 core execution tests + 46 UI and conversation tests.
+195 tests pass: core execution, UI, conversation, and configuration persistence tests.
 
 ## Current Limitations
 
 - Development prototype — not for production use
 - Pairing is simulated with hardcoded development codes
 - Only `format_technician_note` is enabled (`health_check` and `draft_customer_update` are reserved)
-- Temporary in-memory storage only — no persistent database
+- Temporary in-memory storage for job results (configuration persists locally)
+- No persistent database for job results or conversations
 - Results must be copied into Repair StackFlow manually
 - Native macOS app (SwiftUI, Keychain, menu bar) is not yet built
 - No microphone, transcription, text-to-speech, or autonomous check-in

@@ -34,6 +34,13 @@ export const ErrorCode = z.enum([
   "tool_location_not_supported",
   "tool_confirmation_required",
   "tool_not_authorized",
+  "configuration_not_found",
+  "configuration_invalid",
+  "configuration_version_unsupported",
+  "configuration_read_failed",
+  "configuration_write_failed",
+  "configuration_backup_loaded",
+  "configuration_import_rejected",
   "internal_error"
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;

@@ -19,6 +19,12 @@ export interface DiagnosticSnapshot {
   errorCode: string | null;
   appVersion: string;
   generatedAt: string;
+  configurationLoaded: boolean;
+  configurationSchemaVersion: string | null;
+  configurationSource: string;
+  lastConfigurationSave: string | null;
+  persistenceHealthy: boolean;
+  lastPersistenceErrorCode: string | null;
 }
 
 export class DiagnosticService {
@@ -26,7 +32,15 @@ export class DiagnosticService {
     private readonly getIdentity: () => HelperIdentity,
     private readonly getConfig: () => HelperConfig,
     private readonly getHealth: () => HelperHealth | null,
-    private readonly getStore: () => TemporaryJobStore
+    private readonly getStore: () => TemporaryJobStore,
+    private readonly getConfigurationStatus?: () => {
+      loaded: boolean;
+      schemaVersion: string | null;
+      source: string;
+      lastSave: string | null;
+      persistenceHealthy: boolean;
+      lastPersistenceErrorCode: string | null;
+    }
   ) {}
 
   snapshot(): DiagnosticSnapshot {
@@ -42,6 +56,7 @@ export class DiagnosticService {
     } catch {
       host = "unknown";
     }
+    const configStatus = this.getConfigurationStatus?.();
     return {
       helperId: identity.helperId,
       helperRole: identity.role,
@@ -56,7 +71,13 @@ export class DiagnosticService {
       payloadByteCount: null,
       errorCode: lastError?.code ?? null,
       appVersion: identity.appVersion,
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
+      configurationLoaded: configStatus?.loaded ?? false,
+      configurationSchemaVersion: configStatus?.schemaVersion ?? null,
+      configurationSource: configStatus?.source ?? "defaults",
+      lastConfigurationSave: configStatus?.lastSave ?? null,
+      persistenceHealthy: configStatus?.persistenceHealthy ?? true,
+      lastPersistenceErrorCode: configStatus?.lastPersistenceErrorCode ?? null
     };
   }
 

@@ -17,6 +17,7 @@ export function registerAssistantProfileRoutes(app: FastifyInstance, ctx: Helper
         .send(new ProtocolError("validation_failed", parsed.error.issues.map((i: { message: string }) => i.message).join("; "), false).toResponse());
     }
     const updated = ctx.updateAssistantProfile(parsed.data);
+    await ctx.persistConfiguration();
     return reply.send(updated);
   });
 
@@ -32,11 +33,13 @@ export function registerAssistantProfileRoutes(app: FastifyInstance, ctx: Helper
         .send(new ProtocolError("validation_failed", parsed.error.issues.map((i: { message: string }) => i.message).join("; "), false).toResponse());
     }
     const updated = ctx.updateInstructionProfile(parsed.data);
+    await ctx.persistConfiguration();
     return reply.send(updated);
   });
 
   app.post("/api/v1/assistant/reset", async (_req, reply) => {
     ctx.resetAssistantProfile();
+    await ctx.persistConfiguration();
     return reply.send({ reset: true });
   });
 
