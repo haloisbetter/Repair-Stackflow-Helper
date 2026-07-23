@@ -29,8 +29,8 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     implemented: true
   },
   {
-    toolId: "draft_symptom_summary",
-    displayName: "Draft Symptom Summary",
+    toolId: "summarize_checkin_symptoms",
+    displayName: "Summarize Check-in Symptoms",
     description: "Summarize reported symptoms into a concise diagnostic summary for check-in.",
     category: "drafting",
     executionLocation: "local",

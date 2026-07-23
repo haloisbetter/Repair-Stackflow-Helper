@@ -2,259 +2,321 @@
 
 ## Overview
 
-The Guided Check-In workflow enables an employee to assist a customer through a structured device intake conversation. Audio capture is **consent-gated** — no microphone activity occurs until the customer explicitly grants consent. The system transcribes the conversation, progressively extracts structured fields, detects missing required fields and conflicts, generates a technician-friendly symptom summary, and supports customer/device matching suggestions — all reviewed by the employee before submission.
+The Guided Check-In workflow enables an employee to assist a customer through a structured device intake conversation. The application operates in two modes — **Assistant Mode** (chat-based technician note formatting) and **Guided Check-In Mode** (structured intake with audio capture). A prominent mode switch is always visible in the header.
 
-This is an **employee-assisted** workflow, not an autonomous kiosk. The employee drives the session, reviews extracted data, corrects inaccuracies, and approves the final check-in proposal.
+Audio capture is **consent-gated** — no microphone activity occurs until the customer explicitly grants consent. The system transcribes the conversation, progressively extracts structured fields, detects missing required fields and conflicts, generates a technician-friendly symptom summary, and supports customer/device matching suggestions — all reviewed by the employee before submission.
 
-## Architecture
+This is an **employee-assisted** workflow, not an autonomous kiosk.
 
-```
-Employee UI (GuidedCheckIn.tsx)
-       │
-       ▼
-Check-in Routes (routes/checkin.ts)
-       │
-       ├── TemporaryCheckInStore ──── in-memory session storage (bounded)
-       ├── TranscriptionProvider ──── mock or local whisper.cpp/MLX adapter
-       ├── MockFieldExtractor ─────── deterministic field extraction (dev)
-       ├── MissingFieldEngine ─────── required-field detection by device category
-       ├── ConflictDetector ───────── duplicate/contradiction detection
-       ├── MockSymptomSummarizer ──── concise technician summary (dev)
-       └── BackendClient ──────────── customer/device matching + proposal submission
-```
+## Two-Mode Interface
 
-## Session Lifecycle
+### Mode Switch
 
-The check-in session follows a strict 13-state state machine:
+A visible `[ Assistant ] [ Guided Check-In ]` tab switch sits directly beneath the header. It is:
+- Always visible (never hidden in the overflow menu)
+- Keyboard accessible (tab + enter)
+- Shows clear active state
+- Works in narrow companion windows
 
-```
-created → awaiting_consent → ready → listening ⇄ paused
-                                        │
-                                        ▼
-                                   processing
-                                   ↙    ↓    ↘
-                          needs_information  ready_for_review
-                                   ↘    ↑    ↙
-                                    accept/reject/cancel
-                                        │
-                              ──────────┴──────────
-                              expired / error
-```
+### State Preservation
 
-### States
+- Assistant Mode and Guided Mode maintain separate view state
+- Switching modes does not destroy active work
+- Active check-in sessions persist in the backend session store
+- Switching back to Guided mode restores the active session exactly where it was
+- Assistant chat history remains intact while Guided mode is active
+- Active recording shows a persistent indicator in Assistant Mode via the active-session banner
+- Starting a new check-in while one is active requires confirmation
+- Cancelling a session with entered information requires confirmation
 
-| State | Description |
-|-------|-------------|
-| `created` | Session initialized but no consent requested yet |
-| `awaiting_consent` | Consent prompt shown to customer |
-| `ready` | Consent granted, capture can begin |
-| `listening` | Audio capture active, transcript segments being collected |
-| `paused` | Capture temporarily halted by employee |
-| `processing` | Field extraction or summarization in progress |
-| `needs_information` | Required fields missing, employee prompted to collect more |
-| `ready_for_review` | All required fields collected, awaiting employee review |
-| `accepted` | Employee approved the check-in, proposal submitted |
-| `rejected` | Employee rejected the check-in |
-| `cancelled` | Session cancelled by employee |
-| `expired` | Session exceeded TTL (1 hour) without completion |
-| `error` | Unrecoverable error occurred |
+### Active-Session Banner
 
-### State Transitions
+When a check-in session exists, Assistant Mode shows a persistent banner:
+- "Guided Check-In in progress"
+- Customer name (when safely available)
+- Session state
+- Recording state
+- "Return to Check-In" button
 
-Valid transitions are defined in `VALID_STATE_TRANSITIONS` in `checkin-contract.ts` and enforced by `canTransitionCheckIn()`. Terminal states (`accepted`, `rejected`, `cancelled`, `expired`, `error`) cannot transition further.
+No customer information is exposed in diagnostics or browser title text.
 
-## Consent
+## Guided Check-In Layout
 
-Consent is a **hard gate** — `canCaptureAudio()` returns `false` unless consent status is `granted`. The consent lifecycle:
+The Guided mode workspace uses four collapsible sections:
 
-- `not_requested` — Initial state, no capture possible
-- `granted` — Customer approved audio capture, transitions to `ready`
-- `declined` — Customer declined, session moves to manual fallback
-- `withdrawn` — Customer revoked consent mid-session, capture stops immediately
+1. **Listening & Transcript** — Recording controls, consent gate, live transcript
+2. **Customer & Device** — Quick-fire intake fields
+3. **Issue & Intake Details** — Critical questions, accessories, extracted fields, conflicts, missing fields
+4. **Review & Symptom Summary** — Summary generation and final review access
 
-When consent is declined or withdrawn, the employee can use manual fallback mode to enter fields directly.
+A **Readiness Panel** sits between sections 3 and 4, showing:
+- Required fields completed: X/Y
+- Missing information count
+- Unresolved conflicts count
+- Consent status
+- Transcript segment count
+- Summary status
+- Overall readiness: Ready for Review / Needs Information / Blocked by Conflict
 
-## Audio Capture & Transcription
+### Start Screen
 
-### TranscriptionProvider Interface
+When no check-in is active, Guided mode shows:
+- "Start New Check-In" button
+- "Continue Manually" button
+- Microphone and transcription provider status
+- Mock badge when development mode is active
 
-```typescript
-interface TranscriptionProvider {
-  getHealth(): Promise<TranscriptionProviderHealth>;
-  transcribeChunk(audioChunk, sessionId): Promise<TranscriptSegment[]>;
-  finalizeSession(sessionId): Promise<TranscriptSegment[]>;
-}
-```
+## Microphone Controls
 
-### Providers
+### Consent Gate
 
-- **MockTranscriptionProvider** — Deterministic mock that returns 10 predefined customer conversation segments. Used in development mode. No actual audio processing.
-- **LocalTranscriptionProvider** — HTTP adapter for a local whisper.cpp or MLX transcription service. Configurable endpoint, timeout, and health check. **No audio leaves the device.**
+Before consent is granted, the recording card shows:
+- Clear "Customer consent required" message
+- Grant Consent button
+- Declined button
+- Continue Manually button
 
-### TranscriptSegment Schema
+### Recording States
 
-Each segment contains:
-- `segmentId` — Unique identifier
-- `text` — Transcribed text
-- `startTimeMs` / `endTimeMs` — Timing within the session
-- `confidence` — Provider confidence score (0-1)
-- `speakerRole` — `customer`, `employee`, or `unknown`
-- `provider` — `mock` or `local`
-- `isInterim` — Boolean for interim vs. final segments
+**Before listening** (consent granted, idle):
+- Large "Start Listening" button with microphone icon
 
-## Field Extraction
+**While listening:**
+- Red recording indicator with pulse animation
+- Elapsed time counter
+- Audio level meter
+- Microphone device selector (when multiple devices available)
+- Pause and Stop buttons
 
-### Extracted Fields
+**When paused:**
+- "Paused" label with elapsed time
+- Resume and Stop buttons
 
-Fields are organized into four groups:
+**When stopped:**
+- "Process Conversation" button
+- "Add More Conversation" button
 
-1. **Customer Fields** — name, phone, email, preferred contact method
-2. **Device Fields** — brand, model, device category, serial number, color, carrier, OS version
-3. **Repair Intake Fields** — reported issue, symptom timeline, liquid exposure, backup status, Find My status, data importance
-4. **Operational Fields** — passcode handling, charger received, case included, urgency level
+Microphone controls are never hidden inside a menu or small icon.
 
-### Field Confidence Levels
+## Real Browser Audio Capture
 
-Each extracted field carries a confidence level:
+### Implementation
 
-- `confirmed` — Employee explicitly verified this value
-- `stated` — Customer stated this directly in the transcript
-- `inferred` — Derived from context (lower confidence)
-- `unknown` — Field not yet collected
-- `conflicting` — Multiple conflicting values detected
+The `useMicrophone` hook implements real browser audio capture:
 
-### Extraction Implementation
+1. **Consent check** — `getUserMedia` is only called after consent is granted and the employee clicks "Start Listening"
+2. **MediaStream creation** — `navigator.mediaDevices.getUserMedia({ audio: true })` creates a real `MediaStream`
+3. **MediaRecorder** — A `MediaRecorder` instance records audio in 1-second chunks
+4. **Audio chunk collection** — Chunks are collected and flushed every 5 seconds via `requestData()`
+5. **Audio bytes to transcription** — Each blob is sent as `application/octet-stream` to the `/api/v1/checkin/sessions/:id/transcript/audio` endpoint
+6. **No raw audio persistence** — Audio blobs are not stored; only transcript segments are kept
 
-Development mode uses `extractFieldsDeterministic()` — a regex-based extractor that identifies names, phone numbers, emails, device details, issue descriptions, and status indicators from transcript text. It:
+### Track Cleanup
 
-- Preserves employee-confirmed values (never overwrites)
-- Excludes passcodes from extraction (privacy)
-- Detects and rejects prompt injection attempts
-- Normalizes phone numbers and email addresses
+All `MediaStreamTrack` instances are stopped on:
+- Stop button
+- Cancel session
+- Consent withdrawal
+- Component unmount
+- Browser error
+- Session expiration
 
-## Missing Field Engine
+### Error Handling
 
-The `MissingFieldEngine` is deterministic and configurable by device category:
+Visible errors are shown for:
+- `unsupported` — Browser does not support `getUserMedia` or `MediaRecorder`
+- `denied` — Microphone permission denied (`NotAllowedError`)
+- `no_device` — No microphone found (`NotFoundError`)
+- `disconnected` — Microphone unavailable or disconnected (`NotReadableError`)
+- `provider_error` — Transcription provider failure
+- `unknown` — Other errors
 
-- **16 default required fields** across customer, device, and repair intake groups
-- **Apple-specific** — Find My status required for all Apple devices
-- **Device-specific** — Carrier required for phones, OS version for computers/tablets
-- **Configurable** — `getRequiredFields()` accepts device category and Apple flag
+### Mock Transcription
 
-`getMissingFields()` compares extracted fields against required fields and returns missing field names. `getMissingQuestions()` returns suggested questions for the employee to ask.
+Mock transcription is clearly labeled with a "MOCK" badge. It is only used when the mock provider is explicitly active. Real recording failures are shown as errors — mock transcripts are never silently substituted.
 
-## Conflict Detection
+### Local Transcription Provider
 
-`ConflictDetector` identifies:
+The `LocalTranscriptionProvider` accepts raw audio bytes via HTTP POST to a configurable endpoint (e.g., `http://localhost:8080/transcribe`). It sends `application/octet-stream` and expects a JSON response with transcript segments. No audio leaves the device.
 
-1. **Duplicate values** — Same field extracted with different values
-2. **Liquid exposure contradictions** — Customer both confirms and denies liquid exposure
-3. **Backup status contradictions** — Conflicting backup status statements
-4. **Charger conflicts** — Contradictory charger-received statements
+## Quick-Fire Intake Controls
 
-Conflicts have resolution states: `unresolved` or `employee_resolved`. The employee must resolve conflicts before accepting, or explicitly accept with unresolved conflicts (flagged for the technician).
+The employee can capture common intake information without waiting for AI extraction:
+
+### Customer Section
+- New customer / Existing customer toggle
+- First name, Last name, Phone, Email text inputs
+- Preferred contact: Call / Text / Email
+
+### Device Section
+- Device type quick buttons: Mac, Windows PC, iPhone, iPad, Android, Gaming console, Other
+- Manufacturer, Model, Serial number, Color text inputs
+
+### Issue Section
+- Issue type quick buttons: No power, Slow, Won't boot, Broken screen, Liquid damage, Data recovery, Battery issue, Charging issue, Software issue, Virus or scam, Other
+- Detailed description textarea
+
+Selecting a quick issue adds a structured fact but does not replace the customer's detailed description.
+
+## Critical Questions
+
+Fast segmented controls for:
+
+| Question | Options |
+|----------|---------|
+| Liquid exposure | Yes / No / Unsure |
+| Physical damage | Yes / No / Unsure |
+| Backed up | Yes / No / Unsure |
+| Device powers on | Yes / No / Intermittent / Unsure |
+| Data important | Critical / Important / Not important / Unsure |
+| Prior repair | Yes / No / Unsure |
+| Find My (Apple) | Off / On / Unsure / N/A |
+| Passcode handling | Customer will enter / Secure flow / Not available / Not required |
+
+Passcodes are never displayed or stored in this panel.
+
+## Accessories
+
+Tap-friendly toggle controls for:
+- Charger, Power adapter, Cable, Case, Bag, External drive, Other, Device only
+
+Selected accessories are included in the final reviewed intake.
+
+## Quick Customer Statements
+
+Employee-facing question prompt chips:
+- "When did this start?"
+- "Does it happen every time?"
+- "What happened immediately before it started?"
+- "What have you already tried?"
+- "Is your data backed up?"
+- "Was there any liquid exposure?"
+- "Has anyone repaired it before?"
+- "Did you bring the charger?"
+- "Is Find My turned off?"
+
+These insert text into the manual note input — they are not automated spoken questions.
+
+## Live Transcript
+
+The transcript display shows:
+- Final and interim segments (interim styled distinctly)
+- Timestamps
+- Speaker role badges (customer/employee/unknown)
+- Mock label when applicable
+- Manual note input for adding employee notes
+
+## Structured Extraction
+
+As transcription arrives:
+- Fields update progressively
+- Employee-confirmed values are never overwritten
+- AI-filled fields are visually labeled ("AI detected", "AI inferred", "Needs confirmation", "Conflict")
+- Source segment references are preserved internally
 
 ## Symptom Summary
 
-`summarizeSymptomsDeterministic()` generates a concise, technician-friendly summary:
+Live editable preview with:
+- Generate, Regenerate, Edit, Copy buttons
+- Concise, technician-friendly text
+- No diagnosis unless explicitly confirmed
+- No passcode or unnecessary personal details
+- Uncertainties preserved
+- Warnings for data concerns
 
-- Pulls from structured extracted fields (not raw transcript)
-- Preserves uncertainty markers (e.g., "customer reports", "possibly")
-- Flags data concerns (no backup, Find My enabled, liquid exposure)
-- **Never invents diagnoses** — only reports what the customer stated
-- Includes a list of uncertainties for the technician to verify
+The employee can manually write or edit the summary without requiring a complete transcript.
 
-## Customer & Device Matching
+## Final Review
 
-The `BackendClient` interface provides:
+A dedicated final-review view displays:
 
-- `searchCustomerMatches()` — Searches existing customer records by name/phone/email
-- `searchDeviceMatches()` — Searches existing device records by serial number
-- `submitCheckInProposal()` — Submits the approved check-in to the backend
+**Customer:** name, phone, email, preferred contact
+**Device:** category, manufacturer, model, serial, color
+**Intake:** reported issue, issue type, liquid exposure, physical damage, power state, backup, data importance, accessories, Find My, passcode handling
+**Review:** symptom summary, missing fields, conflicts, warnings, consent record, provider provenance, mock status
 
-In development mode, matches return mock data labeled with `isMock: true`. In production, these call the backend API. Matches are **suggestions only** — no auto-merge. The employee decides whether to link to an existing record or create a new one.
+Actions:
+- Accept Check-In (blocked by unresolved conflicts unless override reason provided)
+- Edit and Accept
+- Return to Intake
+- Reject
+- Copy Manually
+- Cancel Session
+
+## Session Lifecycle
+
+13-state state machine: `created → awaiting_consent → ready → listening ⇄ paused → processing → needs_information → ready_for_review → accepted/rejected/cancelled/expired/error`
 
 ## Temporary Session Storage
 
-`TemporaryCheckInStore` is an in-memory bounded store:
+Bounded in-memory store:
+- Maximum 16 sessions
+- Maximum 500 transcript segments per session
+- Maximum 256 KB transcript per session
+- 1 hour TTL
 
-| Bound | Limit |
-|-------|-------|
-| Maximum sessions | 16 |
-| Maximum transcript segments per session | 500 |
-| Maximum transcript bytes per session | 256 KB |
-| Session TTL | 1 hour |
-
-Sessions exceeding bounds are evicted (oldest first). Expired sessions are cleaned up on access. Session metrics (`getSessionMetrics()`) expose only counts and timestamps — **no transcript content, customer data, or symptom text**.
+Session metrics expose only counts and timestamps — no transcript content, customer data, or symptom text.
 
 ## Privacy Controls
 
-- **Consent-gated capture** — No audio activity without explicit consent
-- **Passcode exclusion** — Passcodes are never extracted or stored
-- **Prompt injection detection** — Injection attempts in transcript are flagged and excluded
-- **Local transcription** — Audio processing stays on-device (local provider)
-- **Bounded storage** — Sessions auto-expire and are evicted under memory pressure
-- **Metrics privacy** — Diagnostic metrics expose no sensitive content
-- **Employee review** — All extracted data is reviewed before submission
+- Consent-gated capture
+- Passcode exclusion from extraction and storage
+- Prompt injection detection
+- Local transcription (no audio leaves device)
+- Bounded storage with auto-expiry
+- Metrics privacy
+- Employee review before submission
+- No customer details in diagnostics or browser title
 
 ## API Endpoints
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/v1/checkin/sessions` | Create a new check-in session |
-| GET | `/api/v1/checkin/sessions/:id` | Get session state |
-| POST | `/api/v1/checkin/sessions/:id/consent` | Record consent decision |
-| POST | `/api/v1/checkin/sessions/:id/capture/start` | Begin audio capture |
+| POST | `/api/v1/checkin/sessions` | Create session |
+| GET | `/api/v1/checkin/sessions/:id` | Get session |
+| POST | `/api/v1/checkin/sessions/:id/consent` | Record consent |
+| POST | `/api/v1/checkin/sessions/:id/capture/start` | Start capture |
 | POST | `/api/v1/checkin/sessions/:id/capture/pause` | Pause capture |
-| POST | `/api/v1/checkin/sessions/:id/capture/resume` | Resume paused capture |
+| POST | `/api/v1/checkin/sessions/:id/capture/resume` | Resume capture |
 | POST | `/api/v1/checkin/sessions/:id/capture/stop` | Stop capture |
+| POST | `/api/v1/checkin/sessions/:id/transcript/audio` | Submit audio bytes |
 | POST | `/api/v1/checkin/sessions/:id/transcript/mock` | Add mock transcript (dev) |
+| POST | `/api/v1/checkin/sessions/:id/transcript/manual` | Add manual note |
 | POST | `/api/v1/checkin/sessions/:id/extract` | Run field extraction |
-| PUT | `/api/v1/checkin/sessions/:id/fields` | Update fields (employee corrections) |
+| PUT | `/api/v1/checkin/sessions/:id/fields` | Update fields |
 | POST | `/api/v1/checkin/sessions/:id/summarize` | Generate symptom summary |
 | POST | `/api/v1/checkin/sessions/:id/review` | Submit review decision |
 | POST | `/api/v1/checkin/sessions/:id/cancel` | Cancel session |
-| GET | `/api/v1/checkin/transcription/health` | Transcription provider health |
-| GET | `/api/v1/checkin/metrics` | Active session metrics |
+| GET | `/api/v1/checkin/transcription/health` | Provider health |
+| GET | `/api/v1/checkin/metrics` | Session metrics |
 | POST | `/api/v1/checkin/matches/customers` | Search customer matches |
-| POST | `/api/v1/v1/checkin/matches/devices` | Search device matches |
+| POST | `/api/v1/checkin/matches/devices` | Search device matches |
 
-## UI
+## Task Naming
 
-The `GuidedCheckIn` React component provides:
-
-- Session creation and status display
-- Consent recording (grant/decline/withdraw)
-- Capture controls (start/pause/resume/stop) with recording indicator
-- Live transcript display with speaker roles
-- Extracted fields table with confidence badges
-- Conflict display with resolution states
-- Missing fields list with suggested questions
-- Symptom summary panel with warnings and uncertainties
-- Review actions (accept/reject/regenerate summary/copy summary/cancel)
-- Manual fallback mode when consent is declined
+The canonical task name is `summarize_checkin_symptoms` (not `draft_symptom_summary`). This is consistent across:
+- Approved task definitions
+- Enabled task list
+- Tool registry
+- Contracts
+- API routes
+- Tests
+- Documentation
 
 ## Manual Fallback
 
-When consent is declined or withdrawn, the employee can:
-
-1. Continue the session in manual mode
-2. Enter fields directly via the fields update endpoint
-3. Run extraction on manually-entered text
-4. Generate symptom summary and submit review as normal
-
-Manual mode is indicated in the UI and the session state transitions proceed without audio capture.
+When consent is declined, the employee can enter all fields using the quick-fire controls. Manual mode is indicated in the UI. The session proceeds through review and submission without audio capture.
 
 ## Exclusions
 
-The following were explicitly excluded from this workflow:
-
-- Autonomous kiosk mode (employee-assisted only)
+- Autonomous kiosk mode
 - Wake words or hot-word detection
 - Background listening
-- PIMS automation (no auto-merge, suggestions only)
+- PIMS automation (suggestions only, no auto-merge)
 - Store AI Gateway integration
 - Remote Ollama transcription
 - Native Swift/SwiftUI implementation
 - Payment processing
 - Estimate generation
+- Text-to-speech
+- Phone-call recording

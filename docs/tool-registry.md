@@ -8,8 +8,8 @@ Sprint 3 introduces a central tool registry with 12 registered tools, a tool pol
 |---------------------------|------------------|--------------------|---------|-------------|
 | `format_technician_note`  | note_formatting  | local              | low     | yes         |
 | `draft_customer_update`   | drafting         | local              | medium  | no          |
-| `extract_checkin_fields`  | extraction       | local              | low     | no          |
-| `draft_symptom_summary`   | drafting         | local              | low     | no          |
+| `extract_checkin_fields`  | extraction       | local              | low     | yes         |
+| `summarize_checkin_symptoms` | drafting         | local              | low     | yes         |
 | `suggest_next_question`   | knowledge        | local              | low     | no          |
 | `search_internal_knowledge` | knowledge      | repair_stackflow   | low     | no          |
 | `lookup_customer`         | lookup           | repair_stackflow   | medium  | no          |
@@ -19,7 +19,7 @@ Sprint 3 introduces a central tool registry with 12 registered tools, a tool pol
 | `lookup_parts`            | lookup           | repair_stackflow   | low     | no          |
 | `send_customer_message`   | communication    | repair_stackflow   | high    | no          |
 
-Only `format_technician_note` is implemented and executable in Sprint 3. The remaining 11 tools are registered so their metadata, policies, and UI presence can be configured ahead of implementation.
+Only `format_technician_note` and the check-in tools are implemented. The remaining tools are registered so their metadata, policies, and UI presence can be configured ahead of implementation.
 
 ## ToolPolicy
 

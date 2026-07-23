@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type BootstrapResponse, type DeveloperStatus } from "./app/api-client.js";
 import {
   type ConversationState,
@@ -18,8 +18,12 @@ import { SettingsModal } from "./components/Modals/SettingsModal.js";
 import { DeveloperModal } from "./components/Modals/DeveloperModal.js";
 import { ConfirmationModal } from "./components/Modals/ConfirmationModal.js";
 import { AboutModal } from "./components/Modals/AboutModal.js";
-import { GuidedCheckIn } from "./components/CheckIn/GuidedCheckIn.js";
+import { GuidedCheckIn, type CheckInSessionInfo } from "./components/CheckIn/GuidedCheckIn.js";
 import "./components/CheckIn/guided-checkin.css";
+
+export type AppMode = "assistant" | "checkin";
+
+type ModalType = "settings" | "developer" | "about" | "confirm-mock" | "confirm-new-checkin" | null;
 
 function deriveChips(enabledTools: string[]): string[] {
   const chips: string[] = [];
@@ -30,14 +34,16 @@ function deriveChips(enabledTools: string[]): string[] {
   return chips;
 }
 
-type ModalType = "settings" | "developer" | "about" | "confirm-mock" | "checkin" | null;
-
 export default function App() {
   const [bootstrap, setBootstrap] = useState<BootstrapResponse | null>(null);
   const [conversation, setConversation] = useState<ConversationState>(createInitialState());
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [devStatus, setDevStatus] = useState<DeveloperStatus | null>(null);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
+  const [mode, setMode] = useState<AppMode>("assistant");
+  const [checkInSession, setCheckInSession] = useState<CheckInSessionInfo | null>(null);
+  const [checkInRecording, setCheckInRecording] = useState(false);
+  const pendingNewCheckInRef = useRef(false);
 
   const refreshBootstrap = useCallback(async () => {
     try {
@@ -101,13 +107,21 @@ export default function App() {
         setActiveModal("settings");
         return;
       }
+      if (chip === "Start Guided Check-In") {
+        if (checkInSession) {
+          setMode("checkin");
+        } else {
+          setMode("checkin");
+        }
+        return;
+      }
       const intent = mapChipToIntent(chip);
       if (!intent) return;
       const result = await handleIntent(intent, conversation, bootstrap);
       setConversation(result.state);
       if (intent === "test_ai_connection") void refreshBootstrap();
     },
-    [conversation, bootstrap, refreshBootstrap]
+    [conversation, bootstrap, refreshBootstrap, checkInSession]
   );
 
   const handleSend = useCallback(
@@ -132,9 +146,6 @@ export default function App() {
           break;
         case "about":
           setActiveModal("about");
-          break;
-        case "checkin":
-          setActiveModal("checkin");
           break;
         case "status":
           void (async () => {
@@ -169,6 +180,37 @@ export default function App() {
     setActiveModal(null);
   }, []);
 
+  const switchMode = useCallback((newMode: AppMode) => {
+    setMode(newMode);
+  }, []);
+
+  const handleCheckInSessionChange = useCallback((info: CheckInSessionInfo | null) => {
+    setCheckInSession(info);
+  }, []);
+
+  const handleCheckInRecordingChange = useCallback((recording: boolean) => {
+    setCheckInRecording(recording);
+  }, []);
+
+  const handleStartNewCheckIn = useCallback(() => {
+    if (checkInSession && !isTerminalState(checkInSession.state)) {
+      setActiveModal("confirm-new-checkin");
+      pendingNewCheckInRef.current = true;
+    } else {
+      setMode("checkin");
+    }
+  }, [checkInSession]);
+
+  const confirmNewCheckIn = useCallback(() => {
+    setActiveModal(null);
+    pendingNewCheckInRef.current = false;
+    setMode("checkin");
+  }, []);
+
+  const assistantChips = checkInSession
+    ? [...deriveChips(bootstrap?.enabledTools ?? ["format_technician_note"]), "Start Guided Check-In"]
+    : [...deriveChips(bootstrap?.enabledTools ?? ["format_technician_note"]), "Start Guided Check-In"];
+
   return (
     <div className="companion-window" role="application" aria-label={bootstrap?.assistant?.name ?? "Repair StackFlow Helper"}>
       <CompactHeader
@@ -177,18 +219,70 @@ export default function App() {
         assistant={bootstrap?.assistant ?? null}
         onMenuSelect={handleMenuSelect}
       />
-      <main className="companion-main">
-        <ConversationFeed
-          items={conversation.items}
-          onChipClick={handleChipClick}
-          onCopy={handleCopy}
+      <div className="mode-switch" role="tablist" aria-label="Application mode">
+        <button
+          className={`mode-tab ${mode === "assistant" ? "active" : ""}`}
+          role="tab"
+          aria-selected={mode === "assistant"}
+          onClick={() => switchMode("assistant")}
+        >
+          Assistant
+        </button>
+        <button
+          className={`mode-tab ${mode === "checkin" ? "active" : ""}`}
+          role="tab"
+          aria-selected={mode === "checkin"}
+          onClick={() => switchMode("checkin")}
+        >
+          Guided Check-In
+        </button>
+      </div>
+
+      {mode === "assistant" && (
+        <>
+          {checkInSession && !isTerminalState(checkInSession.state) && (
+            <div className="checkin-active-banner" role="status">
+              <div className="banner-info">
+                <span className="banner-pulse" />
+                <span className="banner-text">
+                  Guided Check-In in progress
+                  {checkInSession.customerName && ` — ${checkInSession.customerName}`}
+                  {" — "}
+                  <span className="banner-state">{checkInSession.state}</span>
+                  {checkInRecording && <span className="banner-recording"> • Recording</span>}
+                </span>
+              </div>
+              <button
+                className="banner-return-btn"
+                onClick={() => switchMode("checkin")}
+              >
+                Return to Check-In
+              </button>
+            </div>
+          )}
+          <main className="companion-main">
+            <ConversationFeed
+              items={conversation.items}
+              onChipClick={handleChipClick}
+              onCopy={handleCopy}
+            />
+          </main>
+          <Composer
+            onSend={handleSend}
+            disabled={conversation.isProcessing}
+            placeholder="Type a technician note or choose an action…"
+          />
+        </>
+      )}
+
+      {mode === "checkin" && (
+        <GuidedCheckIn
+          onClose={() => switchMode("assistant")}
+          onSessionChange={handleCheckInSessionChange}
+          onRecordingChange={handleCheckInRecordingChange}
         />
-      </main>
-      <Composer
-        onSend={handleSend}
-        disabled={conversation.isProcessing}
-        placeholder="Type a technician note or choose an action…"
-      />
+      )}
+
       {copyMsg && (
         <div className="copy-toast" role="status" aria-live="polite">{copyMsg}</div>
       )}
@@ -208,7 +302,6 @@ export default function App() {
         />
       )}
       {activeModal === "about" && <AboutModal onClose={handleModalClose} />}
-      {activeModal === "checkin" && <GuidedCheckIn onClose={handleModalClose} />}
       {activeModal === "confirm-mock" && (
         <ConfirmationModal
           title="Use Mock Provider"
@@ -218,6 +311,19 @@ export default function App() {
           onCancel={handleModalClose}
         />
       )}
+      {activeModal === "confirm-new-checkin" && (
+        <ConfirmationModal
+          title="Start New Check-In?"
+          message="A check-in session is already in progress. Starting a new one will cancel the current session. Continue?"
+          confirmLabel="Start New"
+          onConfirm={confirmNewCheckIn}
+          onCancel={handleModalClose}
+        />
+      )}
     </div>
   );
+}
+
+function isTerminalState(state: string): boolean {
+  return state === "accepted" || state === "rejected" || state === "cancelled" || state === "expired" || state === "error";
 }

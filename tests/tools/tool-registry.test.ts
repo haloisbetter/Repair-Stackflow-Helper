@@ -27,7 +27,7 @@ describe("ToolRegistry", () => {
     expect(toolRegistry.isImplemented("format_technician_note")).toBe(true);
     expect(toolRegistry.isImplemented("draft_customer_update")).toBe(true);
     expect(toolRegistry.isImplemented("extract_checkin_fields")).toBe(true);
-    expect(toolRegistry.isImplemented("draft_symptom_summary")).toBe(true);
+    expect(toolRegistry.isImplemented("summarize_checkin_symptoms")).toBe(true);
     expect(toolRegistry.isImplemented("nonexistent")).toBe(false);
   });
 
@@ -40,7 +40,7 @@ describe("ToolRegistry", () => {
       "format_technician_note",
       "draft_customer_update",
       "extract_checkin_fields",
-      "draft_symptom_summary",
+      "summarize_checkin_symptoms",
       "suggest_next_question",
       "search_internal_knowledge",
       "lookup_customer",

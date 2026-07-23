@@ -16,6 +16,15 @@ import type { RuntimeCoordinator } from "./runtime/runtime-coordinator.js";
 
 export function createApp(ctx: HelperContext, startTime: number = Date.now(), coordinator?: RuntimeCoordinator): FastifyInstance {
   const app = Fastify({ logger: false });
+  app.addContentTypeParser("application/octet-stream", { parseAs: "buffer" }, (_req, body, done) => {
+    done(null, body);
+  });
+  app.addContentTypeParser("audio/webm", { parseAs: "buffer" }, (_req, body, done) => {
+    done(null, body);
+  });
+  app.addContentTypeParser("audio/ogg", { parseAs: "buffer" }, (_req, body, done) => {
+    done(null, body);
+  });
   registerHealthRoutes(app, ctx);
   registerJobRoutes(app, ctx);
   registerDiagnosticsRoutes(app, ctx);

@@ -6,7 +6,7 @@ import { extractFieldsDeterministic } from "../checkin/mock-field-extractor.js";
 import { summarizeSymptomsDeterministic } from "../checkin/mock-symptom-summarizer.js";
 import { getRequiredFields, getMissingFields, getMissingQuestions, isAppleDevice } from "../checkin/missing-field-engine.js";
 import { detectConflicts, canAcceptWithConflicts } from "../checkin/conflict-detector.js";
-import type { CheckInSessionState, ConsentStatus } from "../checkin/checkin-contract.js";
+import type { CheckInSessionState, ConsentStatus, TranscriptSegment } from "../checkin/checkin-contract.js";
 import type { ExtractCheckinFieldsInput } from "../checkin/checkin-task-contracts.js";
 import { randomUUID } from "node:crypto";
 import { computeIdempotencyKey } from "../jobs/idempotency-service.js";
@@ -138,6 +138,58 @@ export function registerCheckInRoutes(app: FastifyInstance, deps: CheckInRouteDe
     } catch (e) {
       return reply.status(400).send({ error: { code: "state_error", message: e instanceof Error ? e.message : "Failed" } });
     }
+  });
+
+  app.post("/api/v1/checkin/sessions/:sessionId/transcript/audio", async (req, reply) => {
+    const { sessionId } = req.params as { sessionId: string };
+    const session = store.get(sessionId);
+    if (!session) return reply.status(404).send({ error: { code: "session_not_found" } });
+    if (session.consentStatus !== "granted") {
+      return reply.status(403).send({ error: { code: "consent_required" } });
+    }
+
+    const chunk = req.body as ArrayBuffer;
+    if (!chunk || chunk.byteLength === 0) {
+      return reply.status(400).send({ error: { code: "empty_audio" } });
+    }
+    if (chunk.byteLength > 10 * 1024 * 1024) {
+      return reply.status(413).send({ error: { code: "audio_too_large", message: "Audio chunk exceeds 10MB limit." } });
+    }
+
+    try {
+      const result = await transcriptionProvider.transcribeChunk({
+        audioChunk: chunk,
+        sessionStartTimeMs: session.captureStartedAt ? new Date(session.captureStartedAt).getTime() : Date.now(),
+        speakerRole: "customer"
+      });
+      const updated = store.addTranscriptSegments(sessionId, result.segments);
+      return reply.send({ segments: result.segments, totalSegments: updated.transcriptSegments.length, providerName: result.providerName });
+    } catch (e) {
+      return reply.status(502).send({ error: { code: "transcription_failed", message: e instanceof Error ? e.message : "Transcription provider error" } });
+    }
+  });
+
+  app.post("/api/v1/checkin/sessions/:sessionId/transcript/manual", async (req, reply) => {
+    const { sessionId } = req.params as { sessionId: string };
+    const session = store.get(sessionId);
+    if (!session) return reply.status(404).send({ error: { code: "session_not_found" } });
+
+    const body = req.body as { text?: string; speakerRole?: string };
+    if (!body?.text || body.text.trim().length === 0) {
+      return reply.status(400).send({ error: { code: "validation_failed", message: "text is required" } });
+    }
+
+    const segment: TranscriptSegment = {
+      segmentId: `manual-${Date.now()}`,
+      text: body.text.trim(),
+      startTimeMs: Date.now() - new Date(session.createdAt).getTime(),
+      endTimeMs: Date.now() - new Date(session.createdAt).getTime(),
+      speakerRole: (body.speakerRole === "customer" || body.speakerRole === "employee") ? body.speakerRole : "employee",
+      provider: "manual",
+      status: "final"
+    };
+    const updated = store.addTranscriptSegments(sessionId, [segment]);
+    return reply.send({ segments: [segment], totalSegments: updated.transcriptSegments.length });
   });
 
   app.post("/api/v1/checkin/sessions/:sessionId/transcript/mock", async (req, reply) => {
