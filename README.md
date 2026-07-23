@@ -1,151 +1,157 @@
 # Repair StackFlow Helper
 
-A local AI execution companion for Repair StackFlow. This is a **development prototype** of the Helper execution core — not the production native macOS application.
+Local AI execution companion for Repair StackFlow.
 
-## What It Does
+**This is a development prototype.** It is not production software. The Repair StackFlow web application remains the permanent system of record.
 
-The Helper runs approved AI tasks locally. The first enabled task is **formatting technician notes**: a technician enters a rough note, the Helper formats it professionally using a local Ollama model (or a deterministic mock provider for testing), and the result can be copied into Repair StackFlow.
+## What the Helper Does
 
-## Quick Start
+- Executes approved AI tasks locally (format technician notes via Ollama or deterministic mock)
+- Manages assistant profiles (name, subtitle, welcome message, avatar, accent color)
+- Enforces organization instructions (global instructions, tone rules, formatting rules, prohibited claims, escalation rules)
+- Enforces tool policies (enabled/disabled, allowed roles, confirmation requirements, execution location)
+- Provides configuration persistence across restarts (profiles, instructions, tool policies, runtime preferences)
+- Provides development pairing (simulated) and diagnostics
+- Serves a slim vertical companion UI for development
+
+## What the Helper Does Not Do
+
+- Replace Repair StackFlow (the web app remains the control plane and system of record)
+- Store customer data persistently (all job results are temporary, 5-minute TTL)
+- Connect to production backends (no Supabase, no Store AI Gateway, no backend job queue)
+- Support multiple concurrent users or multi-tenant workloads
+- Provide production authentication or authorization
+- Act as an unrestricted chatbot or autonomous agent
+
+## Technology
+
+- **Runtime:** Node.js, TypeScript (ES2022, strict mode)
+- **Server:** Fastify 5.x, loopback-only binding (127.0.0.1)
+- **UI:** React, Vite (development proxy to backend)
+- **Validation:** Zod (strict schemas throughout)
+- **Testing:** Vitest (203 tests)
+- **AI Providers:** Ollama (local LLM), deterministic mock
+
+## Running
 
 ```bash
-npm install
-npm run dev
+npm ci
+npm run dev          # Starts both backend (port 8787) and UI (port 5173)
 ```
 
-This starts both the Fastify API server (default port 8787) and the Vite UI dev server (port 5173). Open `http://127.0.0.1:5173` in your browser to see the companion interface.
+## Scripts
 
-To run them separately:
+| Script | Purpose |
+|--------|---------|
+| `npm run dev` | Start development server |
+| `npm run build` | TypeScript compile + Vite production build |
+| `npm run typecheck` | TypeScript type checking only |
+| `npm test` | Run all tests |
+| `npm run test:watch` | Run tests in watch mode |
 
-```bash
-npm run dev:server   # API server only
-npm run dev:ui       # UI only
-```
+## Implemented Tool
 
-## Using the Helper
+Currently only one tool is implemented: `format_technician_note`
 
-### 1. Development Pairing
+This tool:
+1. Accepts a technician's raw note (plain text, max 4096 chars)
+2. Composes a system prompt with organization instructions and anti-hallucination rules
+3. Sends it to the selected AI provider (Ollama or mock)
+4. Validates the structured JSON output against a strict schema
+5. Returns: formatted note, customer reported issue, technician findings, recommended next step, warnings
 
-The Helper starts unpaired. Enter a development pairing code to pair it:
+The mock provider produces deterministic output from simple heuristics. It does not call any AI model. Mock output is labeled `provider: "mock"` in all responses.
 
-- **DEV-YORKTOWN** — pairs to Computer Concepts LLC, Yorktown location
-- **DEV-HAMPTON** — pairs to Computer Concepts LLC, Hampton location
+## AI Providers
 
-Open the menu (⋯ button) → Settings, or use the conversation flow.
+### Ollama (Default)
 
-This is development pairing only — not production authentication.
+- Connects to local Ollama at `http://127.0.0.1:11434`
+- Uses the `/api/chat` endpoint with `stream: false` and `temperature: 0`
+- Default model: `llama3.2`
+- Health checks via `/api/tags`
+- 3-second timeout on health checks, configurable timeout on execution
+- **Status:** Implemented and tested against mock fetch. Real Ollama execution has NOT been verified in this environment (no Ollama instance available).
 
-### 2. Selecting an AI Provider
+### Mock (Development)
 
-From the menu → AI Provider, or from Settings:
-
-- **Ollama** — uses your local Ollama instance at `http://127.0.0.1:11434`
-- **Mock** — uses a deterministic mock provider for testing (clearly labeled)
-- **Auto** — prefers Ollama, falls back only with explicit user action
-
-Provider switching is always explicit. The Helper never silently switches providers.
-
-### 3. Formatting a Technician Note
-
-1. Click **Format note** in the conversation, or type a note in the composer.
-2. The Helper creates an approved versioned job, validates it, and runs the configured provider.
-3. The result appears as a structured card with:
-   - Formatted note (with copy button)
-   - Customer-reported issue
-   - Technician findings
-   - Recommended next step
-   - Warnings (if any)
-4. Click **Copy** to copy the formatted note, then paste it into the Repair StackFlow technician note field.
-
-### 4. Testing the AI Connection
-
-Click **Test AI** to check if Ollama is reachable and the configured model is available. The result appears conversationally with response time.
-
-When Ollama is unavailable, the Helper shows recovery actions: try again, open AI settings, or explicitly switch to the mock provider.
-
-### 5. Clearing the Conversation
-
-Click **Clear** to remove the temporary conversation and completed results. This does not unpair the Helper or change configuration.
-
-## Temporary Data
-
-All job content is stored in memory only:
-- Maximum one active job at a time
-- Up to 8 completed results retained temporarily
-- Results expire after 5 minutes
-- Original technician-note content is removed after processing
-- All temporary content is lost when the process stops
-
-The Repair StackFlow web app remains the permanent system of record. Results must be copied into Repair StackFlow manually — the Helper does not write to work orders.
-
-## Developer Screen
-
-Open the menu (⋯) → Developer to see:
-- Runtime info (version, platform, uptime)
-- Helper identity (ID, role, pairing state)
-- AI runtime (endpoint, model, health status)
-- Job state (active/completed jobs, error codes)
-- Sanitized diagnostics (never contains note content)
-- Development controls (pair, unpair, select provider, reset state)
-- Configuration status (persistence health, source, last save)
-- Export, import, and reset configuration controls
+- Deterministic output from regex-based heuristics
+- No network calls
+- Labeled as `provider: "mock"` in all results
+- Disabled in production mode
 
 ## Configuration Persistence
 
-Assistant profiles, instruction profiles, tool policies, and runtime preferences persist across restarts using a local JSON configuration file. See `docs/local-configuration.md` for full details.
+Assistant profiles, instruction profiles, tool policies, and runtime preferences persist across restarts. See `docs/local-configuration.md` for full details.
 
-- Configuration is stored outside the repository in a platform-appropriate directory
-- Atomic writes with backup prevent data corruption
+- Stored outside the repository in a platform-appropriate directory
+- macOS: `~/Library/Application Support/RepairStackFlowHelper/`
+- Linux: `$XDG_CONFIG_HOME/repair-stackflow-helper/` or `~/.config/repair-stackflow-helper/`
+- Atomic writes with backup prevent corruption
 - Invalid configurations fall back to safe defaults
-- Export and import are available through the Developer screen
+- Export and import available via API and Developer screen
 - No secrets, notes, or business content are ever persisted
 
 ## API Endpoints
 
 ```
-GET  /api/v1/health                          — Helper health check
-GET  /api/v1/status                          — Full status dump
+GET  /api/v1/health                          — Health check (refreshes provider status)
+GET  /api/v1/status                          — Full status (note content is redacted)
 GET  /api/v1/conversation/bootstrap          — UI bootstrap data
-POST /api/v1/actions/format-technician-note  — Run the formatter
-POST /api/v1/actions/test-ai                 — Test Ollama connection
+POST /api/v1/actions/format-technician-note  — Run the formatting tool
+POST /api/v1/actions/test-ai                 — Test Ollama connection directly
 POST /api/v1/actions/clear                   — Clear temporary results
 GET  /api/v1/developer/status                — Developer info (no note content)
 POST /api/v1/developer/reset                 — Reset helper state
 POST /api/v1/dev/pair                        — Development pairing
 POST /api/v1/dev/unpair                      — Unpair
 POST /api/v1/dev/provider/select             — Select AI provider
-POST /api/v1/dev/config                      — Update configuration
+POST /api/v1/dev/config                      — Update runtime configuration
 GET  /api/v1/diagnostics                     — Sanitized diagnostics
+GET  /api/v1/assistant/profile               — Get assistant profile
+PUT  /api/v1/assistant/profile               — Update assistant profile
+GET  /api/v1/assistant/instructions          — Get instruction profile
+PUT  /api/v1/assistant/instructions          — Update instruction profile
+POST /api/v1/assistant/reset                 — Reset assistant to defaults
+GET  /api/v1/tools                           — List all tools
+POST /api/v1/tools/:toolId/policy            — Update tool policy
+POST /api/v1/tools/:toolId/authorize         — Check tool authorization
 GET  /api/v1/dev/configuration/export        — Export configuration
 POST /api/v1/dev/configuration/import        — Import configuration
 POST /api/v1/dev/configuration/reset         — Reset to safe defaults
 GET  /api/v1/dev/configuration/status        — Persistence status
 ```
 
-All endpoints bind to `127.0.0.1` (loopback only).
+## Security Model
+
+- Server binds only to loopback (127.0.0.1) in development
+- No note content appears in diagnostics or status endpoints (redacted)
+- No raw prompts or AI responses appear in diagnostics
+- No credentials are persisted in configuration
+- Unimplemented tools cannot execute (enforced by tool registry `implemented` flag)
+- Arbitrary system prompts, models, or endpoints cannot be supplied via job payloads
+- Invalid configuration cannot partially apply (all-or-nothing validation)
+- Configuration is stored outside the git repository
+
+## Known Limitations
+
+- **Idempotency is incomplete:** `newJobIds()` generates fresh UUIDs per request, so duplicate detection in the store is unreachable from the conversation route. The idempotency infrastructure exists but does not prevent duplicate execution via the UI action endpoint.
+- **Real Ollama not verified:** No real Ollama instance is available in this environment. Provider code is tested against injected mock fetch.
+- **`maxResponseBytes` uses character count:** The Ollama provider compares `content.length` (chars) vs. `maxResponseBytes`, not actual byte length. For ASCII content this is correct; for multi-byte UTF-8 it underestimates.
+- **Model role registry is unused by configuration:** `model-role-registry.ts` defines roles like `technician_note_formatter` but the persisted configuration uses a different enum (`drafting`, `extraction`, `reasoning`, `fast`). No mapping exists between them.
+- **5 dev-only vulnerabilities remain:** All in `vitest`'s internal vite dependency. Not shipped to production.
+- **Pairing is development-simulated only:** No real Repair StackFlow backend is contacted.
 
 ## Tests
 
-```bash
-npm test           # run all tests
-npm run typecheck  # TypeScript type checking
-npm run build      # production build
-```
-
-195 tests pass: core execution, UI, conversation, and configuration persistence tests.
-
-## Current Limitations
-
-- Development prototype — not for production use
-- Pairing is simulated with hardcoded development codes
-- Only `format_technician_note` is enabled (`health_check` and `draft_customer_update` are reserved)
-- Temporary in-memory storage for job results (configuration persists locally)
-- No persistent database for job results or conversations
-- Results must be copied into Repair StackFlow manually
-- Native macOS app (SwiftUI, Keychain, menu bar) is not yet built
-- No microphone, transcription, text-to-speech, or autonomous check-in
-- No arbitrary chat — only approved tasks are executed
-
-## Architecture
-
-See `docs/architecture.md` for the full architecture overview, `docs/protocol-v1.md` for the versioned protocol, `docs/native-macos-handoff.md` for the future Swift implementation plan, and `docs/next-phase-backend-contract.md` for the production backend contract.
+203 tests across 20 test files covering:
+- Assistant profile and instruction validation
+- Tool registry, policies, and authorization
+- Job execution, validation, and idempotency
+- Configuration persistence and backup recovery
+- Safety baseline (redaction, loopback, mock labeling, input validation)
+- UI bootstrap, app state, and components
+- Ollama provider (mocked fetch)
+- Diagnostics and redaction
+- Prompt composition
+- Contract validation

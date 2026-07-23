@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { HelperContext } from "../helper-context.js";
+import { redactObject } from "../diagnostics/redaction.js";
 
 export function registerHealthRoutes(app: FastifyInstance, ctx: HelperContext): void {
   app.get("/api/v1/health", async (_req, reply) => {
@@ -13,6 +14,7 @@ export function registerHealthRoutes(app: FastifyInstance, ctx: HelperContext): 
   });
 
   app.get("/api/v1/status", async (_req, reply) => {
+    const snapshot = ctx.store.snapshot();
     return reply.send({
       identity: {
         helperId: ctx.identity.helperId,
@@ -37,7 +39,21 @@ export function registerHealthRoutes(app: FastifyInstance, ctx: HelperContext): 
       },
       health: ctx.getHealth(),
       lastPairing: ctx.lastPairing,
-      store: ctx.store.snapshot()
+      store: {
+        active: snapshot.active ? { jobId: snapshot.active.jobId, task: snapshot.active.task } : null,
+        completedCount: snapshot.completedCount,
+        failureCount: snapshot.failureCount,
+        completed: snapshot.completed.map((r) => ({
+          jobId: r.jobId,
+          task: r.task,
+          status: r.status,
+          provider: r.provider,
+          model: r.model,
+          timing: r.timing,
+          storedAt: r.storedAt,
+          result: redactObject(r.result)
+        }))
+      }
     });
   });
 }

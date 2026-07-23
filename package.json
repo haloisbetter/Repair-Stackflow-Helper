@@ -10,11 +10,12 @@
     "dev:ui": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "start": "tsx src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "fastify": "^4.28.1",
+    "fastify": "^5.10.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
