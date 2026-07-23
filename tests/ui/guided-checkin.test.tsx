@@ -66,7 +66,7 @@ async function startSession(sid = "s1", state = "created", consent = "not_reques
   mockSessionFlow(sid, state, consent, extra);
   renderCheckIn();
   await fireEvent.click(screen.getByText("Start New Check-In"));
-  await waitFor(() => expect(screen.getByText("Grant Consent")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("Cancel Session")).toBeTruthy());
 }
 
 describe("GuidedCheckIn Start Screen", () => {
@@ -156,7 +156,7 @@ describe("GuidedCheckIn Quick-Fire Controls", () => {
     await waitFor(() => expect(screen.getByText("Preferred contact")).toBeTruthy());
     expect(screen.getByText("Call")).toBeTruthy();
     expect(screen.getByText("Text")).toBeTruthy();
-    expect(screen.getByText("Email")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Email" })).toBeTruthy();
   });
 
   it("shows customer type toggle", async () => {
