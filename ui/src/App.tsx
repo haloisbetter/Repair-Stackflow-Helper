@@ -18,6 +18,8 @@ import { SettingsModal } from "./components/Modals/SettingsModal.js";
 import { DeveloperModal } from "./components/Modals/DeveloperModal.js";
 import { ConfirmationModal } from "./components/Modals/ConfirmationModal.js";
 import { AboutModal } from "./components/Modals/AboutModal.js";
+import { GuidedCheckIn } from "./components/CheckIn/GuidedCheckIn.js";
+import "./components/CheckIn/guided-checkin.css";
 
 function deriveChips(enabledTools: string[]): string[] {
   const chips: string[] = [];
@@ -28,7 +30,7 @@ function deriveChips(enabledTools: string[]): string[] {
   return chips;
 }
 
-type ModalType = "settings" | "developer" | "about" | "confirm-mock" | null;
+type ModalType = "settings" | "developer" | "about" | "confirm-mock" | "checkin" | null;
 
 export default function App() {
   const [bootstrap, setBootstrap] = useState<BootstrapResponse | null>(null);
@@ -131,6 +133,9 @@ export default function App() {
         case "about":
           setActiveModal("about");
           break;
+        case "checkin":
+          setActiveModal("checkin");
+          break;
         case "status":
           void (async () => {
             await refreshBootstrap();
@@ -203,6 +208,7 @@ export default function App() {
         />
       )}
       {activeModal === "about" && <AboutModal onClose={handleModalClose} />}
+      {activeModal === "checkin" && <GuidedCheckIn onClose={handleModalClose} />}
       {activeModal === "confirm-mock" && (
         <ConfirmationModal
           title="Use Mock Provider"

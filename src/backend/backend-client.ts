@@ -14,6 +14,7 @@ import type {
   FailureSubmission,
   CancellationAcknowledgment
 } from "../contracts/v1/protocol.js";
+import type { CustomerMatchRequest, CustomerMatch, DeviceMatchRequest, DeviceMatch, CheckInProposalSubmission, CheckInSubmissionAck } from "../checkin/checkin-matching-contract.js";
 
 export interface BackendClientConfig {
   baseUrl: string;
@@ -33,6 +34,9 @@ export interface BackendClient {
   submitResult(submission: ResultSubmission): Promise<SubmissionAcknowledgment>;
   submitFailure(submission: FailureSubmission): Promise<BackendAcknowledgment>;
   acknowledgeCancellation(ack: CancellationAcknowledgment): Promise<BackendAcknowledgment>;
+  searchCustomerMatches(request: CustomerMatchRequest): Promise<{ matches: CustomerMatch[] }>;
+  searchDeviceMatches(request: DeviceMatchRequest): Promise<{ matches: DeviceMatch[] }>;
+  submitCheckInProposal(submission: CheckInProposalSubmission): Promise<CheckInSubmissionAck>;
 }
 
 export type BackendClientFactory = (config: BackendClientConfig, getToken: () => string | null) => BackendClient;

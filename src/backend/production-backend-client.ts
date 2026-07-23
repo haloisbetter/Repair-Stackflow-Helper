@@ -17,6 +17,7 @@ import type {
 } from "../contracts/v1/protocol.js";
 import { PROTOCOL_VERSION } from "../contracts/v1/protocol.js";
 import { ProtocolError } from "../contracts/v1/errors.js";
+import type { CustomerMatchRequest, CustomerMatch, DeviceMatchRequest, DeviceMatch, CheckInProposalSubmission, CheckInSubmissionAck } from "../checkin/checkin-matching-contract.js";
 
 export class ProductionBackendClient implements BackendClient {
   readonly mode = "production" as const;
@@ -120,5 +121,17 @@ export class ProductionBackendClient implements BackendClient {
 
   async acknowledgeCancellation(ack: CancellationAcknowledgment): Promise<BackendAcknowledgment> {
     return this.request<BackendAcknowledgment>("POST", "/api/v1/helper/jobs/cancellation", ack);
+  }
+
+  async searchCustomerMatches(request: CustomerMatchRequest): Promise<{ matches: CustomerMatch[] }> {
+    return this.request<{ matches: CustomerMatch[] }>("POST", "/api/v1/customers/search", request);
+  }
+
+  async searchDeviceMatches(request: DeviceMatchRequest): Promise<{ matches: DeviceMatch[] }> {
+    return this.request<{ matches: DeviceMatch[] }>("POST", "/api/v1/devices/search", request);
+  }
+
+  async submitCheckInProposal(submission: CheckInProposalSubmission): Promise<CheckInSubmissionAck> {
+    return this.request<CheckInSubmissionAck>("POST", "/api/v1/checkin/proposals", submission);
   }
 }

@@ -8,7 +8,7 @@ describe("ToolRegistry", () => {
 
   it("format_technician_note and draft_customer_update are implemented", () => {
     const implemented = TOOL_DEFINITIONS.filter((t) => t.implemented);
-    expect(implemented).toHaveLength(2);
+    expect(implemented.length).toBeGreaterThanOrEqual(2);
     expect(implemented.map((t) => t.toolId)).toContain("format_technician_note");
     expect(implemented.map((t) => t.toolId)).toContain("draft_customer_update");
   });
@@ -26,6 +26,8 @@ describe("ToolRegistry", () => {
   it("isImplemented returns true for implemented tools", () => {
     expect(toolRegistry.isImplemented("format_technician_note")).toBe(true);
     expect(toolRegistry.isImplemented("draft_customer_update")).toBe(true);
+    expect(toolRegistry.isImplemented("extract_checkin_fields")).toBe(true);
+    expect(toolRegistry.isImplemented("draft_symptom_summary")).toBe(true);
     expect(toolRegistry.isImplemented("nonexistent")).toBe(false);
   });
 

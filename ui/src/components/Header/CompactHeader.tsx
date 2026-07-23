@@ -14,6 +14,7 @@ export function CompactHeader({ health, config, assistant, onMenuSelect }: Props
     { label: "Status", icon: "●", onClick: () => onMenuSelect("status") },
     { label: "AI Provider", icon: "◉", onClick: () => onMenuSelect("ai-provider") },
     { label: "Settings", icon: "⚙", onClick: () => onMenuSelect("settings") },
+    { label: "Guided Check-In", icon: "✓", onClick: () => onMenuSelect("checkin") },
     { label: "Developer", icon: "⌘", onClick: () => onMenuSelect("developer") },
     { label: "About", icon: "ⓘ", onClick: () => onMenuSelect("about") }
   ];

@@ -254,6 +254,9 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  request<T>(path: string, init?: { method?: string; body?: string }): Promise<T> {
+    return request<T>(path, init as RequestInit | undefined);
+  },
   bootstrap: () => request<BootstrapResponse>("/api/v1/conversation/bootstrap"),
   status: () => request<BootstrapResponse>("/api/v1/status"),
   formatNote: (technicianNote: string) =>

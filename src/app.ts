@@ -9,6 +9,9 @@ import { registerToolPolicyRoutes } from "./routes/tool-policies.js";
 import { registerConfigurationRoutes } from "./routes/configuration.js";
 import { registerRuntimeRoutes } from "./routes/runtime.js";
 import { registerReviewRoutes } from "./routes/review.js";
+import { registerCheckInRoutes } from "./routes/checkin.js";
+import { TemporaryCheckInStore } from "./checkin/temporary-checkin-store.js";
+import { MockTranscriptionProvider } from "./checkin/mock-transcription-provider.js";
 import type { RuntimeCoordinator } from "./runtime/runtime-coordinator.js";
 
 export function createApp(ctx: HelperContext, startTime: number = Date.now(), coordinator?: RuntimeCoordinator): FastifyInstance {
@@ -24,5 +27,15 @@ export function createApp(ctx: HelperContext, startTime: number = Date.now(), co
     registerRuntimeRoutes(app, coordinator);
   }
   registerReviewRoutes(app, ctx.proposalStore);
+
+  const checkInStore = new TemporaryCheckInStore();
+  const transcriptionProvider = new MockTranscriptionProvider();
+  registerCheckInRoutes(app, {
+    store: checkInStore,
+    transcriptionProvider,
+    organizationId: ctx.identity.organizationId ?? "dev",
+    locationId: (ctx.identity.locationId ?? undefined) as string | undefined
+  });
+
   return app;
 }

@@ -22,20 +22,20 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     toolId: "extract_checkin_fields",
     displayName: "Extract Check-in Fields",
-    description: "Extract structured check-in fields from a free-text customer description.",
+    description: "Extract structured check-in fields from a transcribed customer conversation.",
     category: "extraction",
     executionLocation: "local",
-    riskLevel: "low",
-    implemented: false
+    riskLevel: "medium",
+    implemented: true
   },
   {
     toolId: "draft_symptom_summary",
     displayName: "Draft Symptom Summary",
-    description: "Summarize reported symptoms into a concise diagnostic summary.",
+    description: "Summarize reported symptoms into a concise diagnostic summary for check-in.",
     category: "drafting",
     executionLocation: "local",
     riskLevel: "low",
-    implemented: false
+    implemented: true
   },
   {
     toolId: "suggest_next_question",

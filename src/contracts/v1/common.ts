@@ -9,7 +9,13 @@ export type IsoTimestamp = z.infer<typeof IsoTimestamp>;
 export const Uuid = z.string().uuid();
 export type Uuid = z.infer<typeof Uuid>;
 
-export const ApprovedTask = z.enum(["health_check", "format_technician_note", "draft_customer_update"]);
+export const ApprovedTask = z.enum([
+  "health_check",
+  "format_technician_note",
+  "draft_customer_update",
+  "extract_guided_checkin_fields",
+  "summarize_checkin_symptoms"
+]);
 export type ApprovedTask = z.infer<typeof ApprovedTask>;
 
 export const OrganizationId = z.string().min(1).max(128);

@@ -17,6 +17,7 @@ import type {
 } from "../contracts/v1/protocol.js";
 import { PROTOCOL_VERSION } from "../contracts/v1/protocol.js";
 import { ProtocolError } from "../contracts/v1/errors.js";
+import type { CustomerMatchRequest, CustomerMatch, DeviceMatchRequest, DeviceMatch, CheckInProposalSubmission, CheckInSubmissionAck } from "../checkin/checkin-matching-contract.js";
 
 export class DevelopmentBackendClient implements BackendClient {
   readonly mode = "development" as const;
@@ -99,5 +100,57 @@ export class DevelopmentBackendClient implements BackendClient {
 
   async acknowledgeCancellation(_ack: CancellationAcknowledgment): Promise<BackendAcknowledgment> {
     return { protocolVersion: PROTOCOL_VERSION, receivedAt: new Date().toISOString() };
+  }
+
+  async searchCustomerMatches(request: CustomerMatchRequest): Promise<{ matches: CustomerMatch[] }> {
+    const matches: CustomerMatch[] = [];
+    if (request.phone) {
+      matches.push({
+        customerId: "00000000-0000-0000-0000-000000000001",
+        firstName: "John",
+        lastName: "Doe",
+        phone: request.phone,
+        matchConfidence: "high",
+        matchReason: "Phone number match",
+        isMock: true
+      });
+    }
+    if (request.email) {
+      matches.push({
+        customerId: "00000000-0000-0000-0000-000000000002",
+        firstName: "Jane",
+        lastName: "Smith",
+        email: request.email,
+        matchConfidence: "high",
+        matchReason: "Email match",
+        isMock: true
+      });
+    }
+    return { matches };
+  }
+
+  async searchDeviceMatches(request: DeviceMatchRequest): Promise<{ matches: DeviceMatch[] }> {
+    const matches: DeviceMatch[] = [];
+    if (request.serialNumber) {
+      matches.push({
+        deviceId: "00000000-0000-0000-0000-000000000003",
+        serialNumber: request.serialNumber,
+        manufacturer: request.manufacturer ?? "Apple",
+        model: request.model ?? "MacBook Pro",
+        matchConfidence: "high",
+        matchReason: "Serial number match",
+        isMock: true
+      });
+    }
+    return { matches };
+  }
+
+  async submitCheckInProposal(submission: CheckInProposalSubmission): Promise<CheckInSubmissionAck> {
+    return {
+      accepted: true,
+      submissionKey: submission.submissionKey,
+      receivedAt: new Date().toISOString(),
+      duplicate: false
+    };
   }
 }
