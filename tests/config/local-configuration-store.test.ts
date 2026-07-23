@@ -281,7 +281,13 @@ describe("FileConfigurationStore", () => {
         provider: "mock",
         executionTarget: "local_on_this_machine",
         modelRole: "fast",
-        ollamaEndpoint: "http://localhost:9999"
+        ollamaEndpoint: "http://localhost:9999",
+        runtimeMode: "development",
+        backendBaseUrl: "http://127.0.0.1:8787",
+        pollingIntervalMs: 10000,
+        heartbeatIntervalMs: 30000,
+        backendTimeoutMs: 15000,
+        maxRetryAttempts: 5
       }
     });
     await store.save(config);

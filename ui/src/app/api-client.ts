@@ -154,6 +154,19 @@ export interface FormatNoteResponse {
   duplicate?: boolean;
 }
 
+export interface RuntimeStatus {
+  mode: "development" | "production";
+  helperState: string;
+  credentialPresent: boolean;
+  credentialStatus: "valid" | "expired" | "revoked" | "absent";
+  lastHeartbeat: string | null;
+  activeJobId: string | null;
+  activeJobState: string | null;
+  pendingSubmissions: number;
+  claimLoopRunning: boolean;
+  protocolVersion: string;
+}
+
 export interface DeveloperStatus {
   runtime: {
     appVersion: string;
@@ -306,5 +319,12 @@ export const api = {
   resetConfiguration: () =>
     request<{ reset: boolean }>("/api/v1/dev/configuration/reset", { method: "POST" }),
   getConfigurationStatus: () =>
-    request<ConfigurationStatus>("/api/v1/dev/configuration/status")
+    request<ConfigurationStatus>("/api/v1/dev/configuration/status"),
+  runtimeStatus: () => request<RuntimeStatus>("/api/v1/runtime/status"),
+  runtimePair: (code: string) =>
+    request<{ paired: boolean; organizationId: string | null; locationId: string | null; role: string | null }>("/api/v1/runtime/pair", {
+      method: "POST",
+      body: JSON.stringify({ pairingCode: code })
+    }),
+  runtimeUnpair: () => request<{ unpaired: boolean }>("/api/v1/runtime/unpair", { method: "POST" })
 };

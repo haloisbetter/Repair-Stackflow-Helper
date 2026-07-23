@@ -193,7 +193,13 @@ export function createHelperContext(
         provider: providerSelection,
         executionTarget: config.executionTarget,
         modelRole: "drafting",
-        ollamaEndpoint: config.ollamaEndpoint
+        ollamaEndpoint: config.ollamaEndpoint,
+        runtimeMode: "development",
+        backendBaseUrl: "http://127.0.0.1:8787",
+        pollingIntervalMs: 10000,
+        heartbeatIntervalMs: 30000,
+        backendTimeoutMs: 15000,
+        maxRetryAttempts: 5
       }
     };
   }

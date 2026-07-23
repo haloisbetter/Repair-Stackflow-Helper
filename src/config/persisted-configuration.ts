@@ -10,7 +10,13 @@ export const RuntimePreferences = z
     provider: z.enum(["ollama", "mock", "auto"]),
     executionTarget: z.enum(["local_on_this_machine", "remote_store_ai"]),
     modelRole: z.enum(["drafting", "extraction", "reasoning", "fast"]),
-    ollamaEndpoint: z.string().min(1).max(512)
+    ollamaEndpoint: z.string().min(1).max(512),
+    runtimeMode: z.enum(["development", "production"]).default("development"),
+    backendBaseUrl: z.string().min(1).max(512).default("http://127.0.0.1:8787"),
+    pollingIntervalMs: z.number().int().min(2000).max(120000).default(10000),
+    heartbeatIntervalMs: z.number().int().min(5000).max(300000).default(30000),
+    backendTimeoutMs: z.number().int().min(5000).max(60000).default(15000),
+    maxRetryAttempts: z.number().int().min(1).max(20).default(5)
   })
   .strict();
 
@@ -35,5 +41,11 @@ export const DEFAULT_RUNTIME_PREFERENCES: RuntimePreferences = {
   provider: "auto",
   executionTarget: "local_on_this_machine",
   modelRole: "drafting",
-  ollamaEndpoint: "http://127.0.0.1:11434"
+  ollamaEndpoint: "http://127.0.0.1:11434",
+  runtimeMode: "development",
+  backendBaseUrl: "http://127.0.0.1:8787",
+  pollingIntervalMs: 10000,
+  heartbeatIntervalMs: 30000,
+  backendTimeoutMs: 15000,
+  maxRetryAttempts: 5
 };

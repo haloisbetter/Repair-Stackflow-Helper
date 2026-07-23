@@ -5,6 +5,7 @@ const SENSITIVE_KEYS = new Set<string>([
   "password",
   "secret",
   "credential",
+  "credentialToken",
   "authorization",
   "technicianNote",
   "technician_note",
@@ -60,5 +61,14 @@ export const SAFE_DIAGNOSTIC_KEYS = [
   "requestDurationMs",
   "payloadByteCount",
   "errorCode",
-  "appVersion"
+  "appVersion",
+  "runtimeMode",
+  "helperState",
+  "credentialStatus",
+  "lastHeartbeat",
+  "activeJobId",
+  "activeJobState",
+  "pendingSubmissions",
+  "claimLoopRunning",
+  "protocolVersion"
 ] as const;

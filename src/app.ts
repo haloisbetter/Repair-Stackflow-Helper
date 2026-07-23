@@ -7,8 +7,10 @@ import { registerConversationRoutes } from "./routes/conversation.js";
 import { registerAssistantProfileRoutes } from "./routes/assistant-profile.js";
 import { registerToolPolicyRoutes } from "./routes/tool-policies.js";
 import { registerConfigurationRoutes } from "./routes/configuration.js";
+import { registerRuntimeRoutes } from "./routes/runtime.js";
+import type { RuntimeCoordinator } from "./runtime/runtime-coordinator.js";
 
-export function createApp(ctx: HelperContext, startTime: number = Date.now()): FastifyInstance {
+export function createApp(ctx: HelperContext, startTime: number = Date.now(), coordinator?: RuntimeCoordinator): FastifyInstance {
   const app = Fastify({ logger: false });
   registerHealthRoutes(app, ctx);
   registerJobRoutes(app, ctx);
@@ -17,5 +19,8 @@ export function createApp(ctx: HelperContext, startTime: number = Date.now()): F
   registerAssistantProfileRoutes(app, ctx);
   registerToolPolicyRoutes(app, ctx);
   registerConfigurationRoutes(app, ctx);
+  if (coordinator) {
+    registerRuntimeRoutes(app, coordinator);
+  }
   return app;
 }

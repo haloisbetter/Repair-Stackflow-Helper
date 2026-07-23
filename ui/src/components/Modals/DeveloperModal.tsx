@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Modal } from "./Modal.js";
-import type { DeveloperStatus, BootstrapResponse } from "../../app/api-client.js";
+import type { DeveloperStatus, BootstrapResponse, RuntimeStatus } from "../../app/api-client.js";
 import { api } from "../../app/api-client.js";
 
 interface Props {
@@ -32,6 +32,41 @@ function Row({ label, value }: { label: string; value: string | number | null })
 export function DeveloperModal({ status, bootstrap, onClose, onRefresh }: Props) {
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
   const [configMsg, setConfigMsg] = useState<string | null>(null);
+  const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null);
+  const [pairingCode, setPairingCode] = useState("");
+  const [pairingMsg, setPairingMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.runtimeStatus().then(setRuntimeStatus).catch(() => {});
+  }, []);
+
+  const refreshRuntime = () => {
+    api.runtimeStatus().then(setRuntimeStatus).catch(() => {});
+  };
+
+  const handleRuntimePair = async () => {
+    if (!pairingCode.trim()) return;
+    try {
+      await api.runtimePair(pairingCode.trim());
+      setPairingMsg("Paired successfully.");
+      setPairingCode("");
+      refreshRuntime();
+      setTimeout(() => setPairingMsg(null), 3000);
+    } catch (e) {
+      setPairingMsg(e instanceof Error ? e.message : "Pairing failed.");
+    }
+  };
+
+  const handleRuntimeUnpair = async () => {
+    try {
+      await api.runtimeUnpair();
+      setPairingMsg("Unpaired.");
+      refreshRuntime();
+      setTimeout(() => setPairingMsg(null), 3000);
+    } catch (e) {
+      setPairingMsg(e instanceof Error ? e.message : "Unpair failed.");
+    }
+  };
 
   const handleCopyDiagnostics = async () => {
     try {
@@ -117,6 +152,31 @@ export function DeveloperModal({ status, bootstrap, onClose, onRefresh }: Props)
           <Row label="Platform" value={status?.runtime.platform ?? null} />
           <Row label="Architecture" value={status?.runtime.architecture ?? null} />
           <Row label="Uptime" value={status?.runtime.uptimeMs ? `${Math.floor(status.runtime.uptimeMs / 1000)}s` : null} />
+        </Section>
+
+        <Section title="Production Runtime">
+          <Row label="Mode" value={runtimeStatus?.mode ?? null} />
+          <Row label="Helper state" value={runtimeStatus?.helperState ?? null} />
+          <Row label="Credential" value={runtimeStatus?.credentialStatus ?? null} />
+          <Row label="Last heartbeat" value={runtimeStatus?.lastHeartbeat ?? "never"} />
+          <Row label="Active job" value={runtimeStatus?.activeJobId ?? "none"} />
+          <Row label="Job state" value={runtimeStatus?.activeJobState ?? "idle"} />
+          <Row label="Pending submissions" value={String(runtimeStatus?.pendingSubmissions ?? 0)} />
+          <Row label="Claim loop" value={runtimeStatus?.claimLoopRunning ? "running" : "stopped"} />
+          <Row label="Protocol version" value={runtimeStatus?.protocolVersion ?? null} />
+          <div className="dev-row" style={{ marginTop: "8px" }}>
+            <input
+              type="text"
+              placeholder="Pairing code"
+              value={pairingCode}
+              onChange={(e) => setPairingCode(e.target.value)}
+              style={{ flex: 1, padding: "4px 8px", borderRadius: "4px", border: "1px solid var(--border-color, #333)", background: "var(--bg-secondary, #1a1a1a)", color: "inherit", fontSize: "12px" }}
+            />
+            <button onClick={handleRuntimePair} style={{ marginLeft: "8px", padding: "4px 12px", borderRadius: "4px", fontSize: "12px" }}>Pair</button>
+            <button onClick={handleRuntimeUnpair} style={{ marginLeft: "4px", padding: "4px 12px", borderRadius: "4px", fontSize: "12px" }}>Unpair</button>
+            <button onClick={refreshRuntime} style={{ marginLeft: "4px", padding: "4px 12px", borderRadius: "4px", fontSize: "12px" }}>Refresh</button>
+          </div>
+          {pairingMsg && <div className="dev-row" style={{ color: "var(--accent-color, #6ab)", fontSize: "11px" }}>{pairingMsg}</div>}
         </Section>
 
         <Section title="Helper Identity">
