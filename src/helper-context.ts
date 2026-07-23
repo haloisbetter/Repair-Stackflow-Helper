@@ -11,8 +11,10 @@ import { MockAIProvider } from "./ai/mock-ai-provider.js";
 import type { AIProvider } from "./ai/ai-provider.js";
 import { TaskRegistry } from "./tasks/task-registry.js";
 import { formatTechnicianNoteTemplate } from "./tasks/format-technician-note/prompt-template.js";
+import { draftCustomerUpdateTemplate } from "./tasks/draft-customer-update/prompt-template.js";
 import { TemporaryJobStore } from "./jobs/temporary-job-store.js";
 import { JobRunner } from "./jobs/job-runner.js";
+import { TemporaryProposalStore } from "./review/temporary-proposal-store.js";
 import { DiagnosticService } from "./diagnostics/diagnostic-service.js";
 import { ProtocolError } from "./contracts/v1/errors.js";
 import { ToolRegistry, toolRegistry } from "./tools/tool-registry.js";
@@ -55,6 +57,7 @@ export interface HelperContext {
   healthService: HealthService;
   taskRegistry: TaskRegistry;
   store: TemporaryJobStore;
+  proposalStore: TemporaryProposalStore;
   jobRunner: JobRunner;
   diagnostics: DiagnosticService;
   assistantProfileService: AssistantProfileService;
@@ -114,6 +117,7 @@ export function createHelperContext(
   let identity = createDevelopmentIdentity(config.helperRole);
   const pairing = createDevPairingService();
   const store = new TemporaryJobStore();
+  const proposalStore = new TemporaryProposalStore();
 
   let providerSelection: ProviderSelection = config.providerSelection;
   let mockProvider = new MockAIProvider({ isProduction: false });
@@ -135,11 +139,25 @@ export function createHelperContext(
         requiresConfirmation: false,
         executionLocation: "local"
       }
+    ],
+    [
+      "draft_customer_update",
+      {
+        organizationId: identity.organizationId ?? "dev",
+        toolId: "draft_customer_update",
+        enabled: true,
+        allowedRoles: ["workstation_agent", "ai_host", "combined"],
+        requiresConfirmation: true,
+        executionLocation: "local"
+      }
     ]
   ]);
   let enabledTools: readonly string[] = Array.from(DEFAULT_ENABLED_TOOLS);
   const taskRegistry = new TaskRegistry(
-    new Map([["format_technician_note", formatTechnicianNoteTemplate]]),
+    new Map<string, any>([
+      ["format_technician_note", formatTechnicianNoteTemplate],
+      ["draft_customer_update", draftCustomerUpdateTemplate]
+    ]),
     tools
   );
   let jobRunner = new JobRunner({
@@ -151,7 +169,8 @@ export function createHelperContext(
     toolRegistry: tools,
     enabledTools: () => enabledTools,
     getToolPolicy: (toolId: string) => toolPolicies.get(toolId) ?? null,
-    assistantProfileService
+    assistantProfileService,
+    proposalStore
   });
   let diagnostics = new DiagnosticService(
     () => identity,
@@ -178,7 +197,8 @@ export function createHelperContext(
       toolRegistry: tools,
       enabledTools: () => enabledTools,
       getToolPolicy: (toolId: string) => toolPolicies.get(toolId) ?? null,
-      assistantProfileService
+      assistantProfileService,
+      proposalStore
     });
   }
 
@@ -231,6 +251,20 @@ export function createHelperContext(
         enabledTools = [...enabledTools, "format_technician_note"];
       }
     }
+    if (!toolPolicies.has("draft_customer_update")) {
+      const defaultPolicy: ToolPolicy = {
+        organizationId: identity.organizationId ?? "dev",
+        toolId: "draft_customer_update",
+        enabled: true,
+        allowedRoles: ["workstation_agent", "ai_host", "combined"],
+        requiresConfirmation: true,
+        executionLocation: "local"
+      };
+      toolPolicies.set("draft_customer_update", defaultPolicy);
+      if (!enabledTools.includes("draft_customer_update")) {
+        enabledTools = [...enabledTools, "draft_customer_update"];
+      }
+    }
 
     const prefs = persisted.runtimePreferences;
     providerSelection = prefs.provider;
@@ -252,6 +286,7 @@ export function createHelperContext(
     get provider() { return provider; },
     get healthService() { return healthService; },
     get taskRegistry() { return taskRegistry; },
+    get proposalStore() { return proposalStore; },
     get store() { return store; },
     get jobRunner() { return jobRunner; },
     get diagnostics() { return diagnostics; },
@@ -465,6 +500,17 @@ export function createHelperContext(
             enabled: true,
             allowedRoles: ["workstation_agent", "ai_host", "combined"],
             requiresConfirmation: false,
+            executionLocation: "local"
+          }
+        ],
+        [
+          "draft_customer_update",
+          {
+            organizationId: identity.organizationId ?? "dev",
+            toolId: "draft_customer_update",
+            enabled: true,
+            allowedRoles: ["workstation_agent", "ai_host", "combined"],
+            requiresConfirmation: true,
             executionLocation: "local"
           }
         ]

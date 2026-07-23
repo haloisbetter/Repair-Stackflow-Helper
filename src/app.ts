@@ -8,6 +8,7 @@ import { registerAssistantProfileRoutes } from "./routes/assistant-profile.js";
 import { registerToolPolicyRoutes } from "./routes/tool-policies.js";
 import { registerConfigurationRoutes } from "./routes/configuration.js";
 import { registerRuntimeRoutes } from "./routes/runtime.js";
+import { registerReviewRoutes } from "./routes/review.js";
 import type { RuntimeCoordinator } from "./runtime/runtime-coordinator.js";
 
 export function createApp(ctx: HelperContext, startTime: number = Date.now(), coordinator?: RuntimeCoordinator): FastifyInstance {
@@ -22,5 +23,6 @@ export function createApp(ctx: HelperContext, startTime: number = Date.now(), co
   if (coordinator) {
     registerRuntimeRoutes(app, coordinator);
   }
+  registerReviewRoutes(app, ctx.proposalStore);
   return app;
 }

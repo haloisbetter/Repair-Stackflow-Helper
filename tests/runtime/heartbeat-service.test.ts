@@ -68,7 +68,8 @@ describe("HeartbeatService", () => {
     await service.sendHeartbeat();
     const payload = JSON.stringify(capturedRequests[0]);
     expect(payload).not.toContain("technicianNote");
-    expect(payload).not.toContain("customer");
+    expect(payload).not.toContain("customerFacingDraft");
+    expect(payload).not.toContain("customerReportedIssue");
     expect(payload).not.toContain("formattedNote");
     expect(payload).not.toContain("password");
     expect(payload).not.toContain("secret");
@@ -85,8 +86,8 @@ describe("HeartbeatService", () => {
 
   it("unimplemented tasks not in capability report", () => {
     const report = service.buildCapabilityReport();
-    expect(report.implementedTasks).not.toContain("draft_customer_update");
-    expect(report.implementedTasks).not.toContain("health_check");
+    expect(report.implementedTasks).not.toContain("send_customer_message");
+    expect(report.implementedTasks).not.toContain("build_estimate");
   });
 
   it("heartbeat failure triggers degraded after 3 consecutive failures", async () => {

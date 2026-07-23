@@ -6,10 +6,11 @@ describe("ToolRegistry", () => {
     expect(TOOL_DEFINITIONS).toHaveLength(12);
   });
 
-  it("only format_technician_note is implemented", () => {
+  it("format_technician_note and draft_customer_update are implemented", () => {
     const implemented = TOOL_DEFINITIONS.filter((t) => t.implemented);
-    expect(implemented).toHaveLength(1);
-    expect(implemented[0]?.toolId).toBe("format_technician_note");
+    expect(implemented).toHaveLength(2);
+    expect(implemented.map((t) => t.toolId)).toContain("format_technician_note");
+    expect(implemented.map((t) => t.toolId)).toContain("draft_customer_update");
   });
 
   it("resolves a known tool", () => {
@@ -22,9 +23,9 @@ describe("ToolRegistry", () => {
     expect(toolRegistry.resolve("nonexistent_tool")).toBeNull();
   });
 
-  it("isImplemented returns true only for format_technician_note", () => {
+  it("isImplemented returns true for implemented tools", () => {
     expect(toolRegistry.isImplemented("format_technician_note")).toBe(true);
-    expect(toolRegistry.isImplemented("draft_customer_update")).toBe(false);
+    expect(toolRegistry.isImplemented("draft_customer_update")).toBe(true);
     expect(toolRegistry.isImplemented("nonexistent")).toBe(false);
   });
 

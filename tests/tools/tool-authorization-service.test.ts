@@ -39,11 +39,11 @@ describe("authorizeToolUse", () => {
 
   it("rejects unimplemented tool", () => {
     const decision = authorizeToolUse({
-      toolId: "draft_customer_update",
+      toolId: "send_customer_message",
       role: "workstation_agent",
       toolRegistry,
-      enabledTools: ["draft_customer_update"],
-      policy: { ...basePolicy, toolId: "draft_customer_update" },
+      enabledTools: ["send_customer_message"],
+      policy: { ...basePolicy, toolId: "send_customer_message" },
       confirmationProvided: true
     });
     expect(decision.authorized).toBe(false);

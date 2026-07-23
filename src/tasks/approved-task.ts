@@ -6,7 +6,10 @@ export const APPROVED_TASKS: ReadonlySet<ApprovedTask> = new Set([
   "draft_customer_update"
 ]);
 
-export const ENABLED_TASKS: ReadonlySet<ApprovedTask> = new Set(["format_technician_note"]);
+export const ENABLED_TASKS: ReadonlySet<ApprovedTask> = new Set([
+  "format_technician_note",
+  "draft_customer_update"
+]);
 
 export function isApproved(task: string): task is ApprovedTask {
   return APPROVED_TASKS.has(task as ApprovedTask);

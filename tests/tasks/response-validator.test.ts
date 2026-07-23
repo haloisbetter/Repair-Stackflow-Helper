@@ -6,8 +6,15 @@ const VALID = {
   formattedNote: "Professional note.",
   customerReportedIssue: "Customer reports laptop shuts off.",
   technicianFindings: ["Battery voltage low."],
-  recommendedNextStep: "Run battery diagnostic.",
-  warnings: []
+  workPerformed: [],
+  unresolvedIssues: [],
+  recommendations: ["Run battery diagnostic."],
+  warnings: [],
+  uncertainStatements: [],
+  omittedSensitiveContent: [],
+  sourceFactsUsed: ["Battery voltage low"],
+  sourceFactsExcluded: [],
+  recommendedNextStep: "Run battery diagnostic."
 };
 
 describe("structured output validator", () => {

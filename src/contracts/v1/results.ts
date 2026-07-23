@@ -3,12 +3,36 @@ import { ApprovedTask, HelperId, IsoTimestamp, SCHEMA_VERSION, Uuid } from "./co
 
 export const TechnicianNoteResult = z.object({
   formattedNote: z.string().min(1).max(4096),
-  customerReportedIssue: z.string().min(1).max(1024),
+  customerReportedIssue: z.string().min(0).max(1024),
   technicianFindings: z.array(z.string().min(1).max(1024)).max(32),
-  recommendedNextStep: z.string().min(1).max(1024),
-  warnings: z.array(z.string().min(1).max(1024)).max(32)
-}).strict();
+  workPerformed: z.array(z.string().min(1).max(1024)).max(32).default([]),
+  unresolvedIssues: z.array(z.string().min(1).max(1024)).max(32).default([]),
+  recommendations: z.array(z.string().min(1).max(1024)).max(16).default([]),
+  warnings: z.array(z.string().min(1).max(1024)).max(32),
+  uncertainStatements: z.array(z.string().min(1).max(1024)).max(32).default([]),
+  omittedSensitiveContent: z.array(z.string().min(1).max(256)).max(16).default([]),
+  sourceFactsUsed: z.array(z.string().min(1).max(512)).max(64).default([]),
+  sourceFactsExcluded: z.array(z.string().min(1).max(512)).max(64).default([]),
+  recommendedNextStep: z.string().min(0).max(1024)
+});
 export type TechnicianNoteResult = z.infer<typeof TechnicianNoteResult>;
+
+export const CustomerUpdateResult = z.object({
+  customerFacingDraft: z.string().min(1).max(2048),
+  subjectLine: z.string().min(0).max(256).optional(),
+  communicationChannel: z.enum(["sms", "email", "phone_call", "in_person"]),
+  confirmedFactsUsed: z.array(z.string().min(1).max(512)).max(32),
+  factsExcluded: z.array(z.string().min(1).max(512)).max(32),
+  requiredCustomerAction: z.string().min(0).max(1024),
+  nextStep: z.string().min(0).max(1024),
+  warnings: z.array(z.string().min(1).max(1024)).max(32),
+  uncertainOrMissingInformation: z.array(z.string().min(1).max(1024)).max(32),
+  prohibitedClaimsAvoided: z.array(z.string().min(1).max(512)).max(32)
+});
+export type CustomerUpdateResult = z.infer<typeof CustomerUpdateResult>;
+
+export const TaskResult = z.union([TechnicianNoteResult, CustomerUpdateResult]);
+export type TaskResult = z.infer<typeof TaskResult>;
 
 export const ResultStatus = z.enum(["completed", "failed"]);
 export type ResultStatus = z.infer<typeof ResultStatus>;
@@ -31,9 +55,9 @@ export const JobResultSubmission = z.object({
   provider: z.enum(["ollama", "mock"]),
   executionTarget: z.enum(["local_on_this_machine", "remote_store_ai"]),
   model: z.string().min(1).max(128),
-  result: TechnicianNoteResult,
+  result: z.record(z.unknown()),
   timing: Timing
-}).strict();
+});
 export type JobResultSubmission = z.infer<typeof JobResultSubmission>;
 
 export const JobFailureSubmission = z.object({

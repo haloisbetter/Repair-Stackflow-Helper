@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { MockAIProvider, buildDeterministicResult } from "../../src/ai/mock-ai-provider.js";
+import { MockAIProvider, buildDeterministicTechnicianNote } from "../../src/ai/mock-ai-provider.js";
 import { OllamaProvider } from "../../src/ai/ollama-provider.js";
 import { TaskRegistry } from "../../src/tasks/task-registry.js";
 import { formatTechnicianNoteTemplate } from "../../src/tasks/format-technician-note/prompt-template.js";
 import { TemporaryJobStore } from "../../src/jobs/temporary-job-store.js";
 import { JobRunner } from "../../src/jobs/job-runner.js";
+import { TemporaryProposalStore } from "../../src/review/temporary-proposal-store.js";
 import { ProtocolError } from "../../src/contracts/v1/errors.js";
 import { makeIdentity, makeConfig, makeValidJob } from "../helpers/fixtures.js";
 import { toolRegistry } from "../../src/tools/tool-registry.js";
@@ -22,6 +23,7 @@ const defaultPolicy: ToolPolicy = {
 
 function makeRunner(provider: MockAIProvider | OllamaProvider, identity = makeIdentity(), config = makeConfig()) {
   const store = new TemporaryJobStore();
+  const proposalStore = new TemporaryProposalStore();
   const registry = new TaskRegistry(new Map([["format_technician_note", formatTechnicianNoteTemplate]]), toolRegistry);
   const assistantProfileService = createDefaultAssistantProfileService();
   const runner = new JobRunner({
@@ -33,9 +35,10 @@ function makeRunner(provider: MockAIProvider | OllamaProvider, identity = makeId
     toolRegistry,
     enabledTools: () => ["format_technician_note"],
     getToolPolicy: (toolId: string) => (toolId === "format_technician_note" ? defaultPolicy : null),
-    assistantProfileService
+    assistantProfileService,
+    proposalStore
   });
-  return { runner, store, registry };
+  return { runner, store, registry, proposalStore };
 }
 
 describe("mock provider", () => {
@@ -51,8 +54,8 @@ describe("mock provider", () => {
   });
 
   it("produces identical output for identical input", async () => {
-    const r1 = buildDeterministicResult("Battery might be bad.");
-    const r2 = buildDeterministicResult("Battery might be bad.");
+    const r1 = buildDeterministicTechnicianNote("Battery might be bad.");
+    const r2 = buildDeterministicTechnicianNote("Battery might be bad.");
     expect(r1).toEqual(r2);
   });
 });
@@ -120,8 +123,15 @@ describe("structured output validation", () => {
         formattedNote: "ok",
         customerReportedIssue: "ok",
         technicianFindings: [],
-        recommendedNextStep: "ok",
+        workPerformed: [],
+        unresolvedIssues: [],
+        recommendations: [],
         warnings: [],
+        uncertainStatements: [],
+        omittedSensitiveContent: [],
+        sourceFactsUsed: [],
+        sourceFactsExcluded: [],
+        recommendedNextStep: "ok",
         surpriseField: "bad"
       }),
       provider: "mock",
@@ -169,6 +179,7 @@ describe("temporary storage", () => {
     const mock = new MockAIProvider();
     const identity = makeIdentity();
     const config = makeConfig();
+    const proposalStore = new TemporaryProposalStore();
     const registry = new TaskRegistry(new Map([["format_technician_note", formatTechnicianNoteTemplate]]), toolRegistry);
     const assistantProfileService = createDefaultAssistantProfileService();
     const runner = new JobRunner({
@@ -180,12 +191,12 @@ describe("temporary storage", () => {
       toolRegistry,
       enabledTools: () => ["format_technician_note"],
       getToolPolicy: (toolId: string) => (toolId === "format_technician_note" ? defaultPolicy : null),
-      assistantProfileService
+      assistantProfileService,
+      proposalStore
     });
     const job = makeValidJob({ assignedHelperId: identity.helperId });
     const outcome = await runner.run({ rawJob: job });
     expect(outcome.result).toBeDefined();
-    // mutate expiry to past and verify purge
     const stored = store.getResultByJob(outcome.result!.jobId)!;
     stored.expiresAt = Date.now() - 1;
     expect(store.getResultByJob(outcome.result!.jobId)).toBeNull();
@@ -196,13 +207,26 @@ describe("task registry", () => {
   it("rejects reserved-but-disabled tasks with task_not_enabled", () => {
     const registry = new TaskRegistry(new Map([["format_technician_note", formatTechnicianNoteTemplate]]));
     expect(() => registry.resolve("health_check")).toThrow(ProtocolError);
-    try { registry.resolve("draft_customer_update"); } catch (e) {
-      expect((e as ProtocolError).code).toBe("task_not_enabled");
-    }
   });
 
   it("rejects unknown tasks", () => {
     const registry = new TaskRegistry(new Map([["format_technician_note", formatTechnicianNoteTemplate]]));
     expect(() => registry.resolve("arbitrary_chat")).toThrow(ProtocolError);
+  });
+});
+
+describe("proposal creation", () => {
+  it("creates a pending_review proposal after job completion", async () => {
+    const mock = new MockAIProvider();
+    const identity = makeIdentity();
+    const { runner, proposalStore } = makeRunner(mock, identity);
+    const job = makeValidJob({ assignedHelperId: identity.helperId });
+    const outcome = await runner.run({ rawJob: job });
+    expect(outcome.status).toBe("completed");
+    expect(outcome.proposalId).toBeDefined();
+    const proposal = proposalStore.get(outcome.proposalId!);
+    expect(proposal).not.toBeNull();
+    expect(proposal?.reviewStatus).toBe("pending_review");
+    expect(proposal?.taskName).toBe("format_technician_note");
   });
 });

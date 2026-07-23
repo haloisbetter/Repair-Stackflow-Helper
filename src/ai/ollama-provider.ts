@@ -55,23 +55,33 @@ export class OllamaProvider implements AIProvider {
 
   async execute(request: ApprovedAIExecutionRequest): Promise<AIExecutionResult> {
     const start = Date.now();
+    const body: Record<string, unknown> = {
+      model: request.model,
+      stream: false,
+      messages: [
+        { role: "system", content: request.systemPrompt },
+        { role: "user", content: request.userPrompt }
+      ],
+      options: { temperature: 0 }
+    };
+    if (request.responseFormat === "json") {
+      body.format = "json";
+    }
     const res = await this.fetchImpl(`${this.endpoint}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({
-        model: request.model,
-        stream: false,
-        messages: [
-          { role: "system", content: request.systemPrompt },
-          { role: "user", content: request.userPrompt }
-        ],
-        options: { temperature: 0 }
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(request.timeoutMs)
+    }).catch((e) => {
+      if (e instanceof DOMException && e.name === "TimeoutError") {
+        throw new Error(`Ollama request timed out after ${request.timeoutMs}ms`);
+      }
+      throw new Error(`Ollama unreachable: ${e instanceof Error ? e.message : String(e)}`);
     });
     const durationMs = Date.now() - start;
     if (!res.ok) {
       const text = await res.text().catch(() => "");
+      if (res.status === 404) throw new Error(`Ollama model not found: ${request.model}`);
       throw new Error(`Ollama HTTP ${res.status}: ${text.slice(0, 200)}`);
     }
     const data = (await res.json()) as { message?: { content?: string }; error?: string };

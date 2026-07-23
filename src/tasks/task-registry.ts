@@ -12,9 +12,11 @@ export interface TaskRegistryEntry {
   implemented: boolean;
 }
 
+type AnyTaskTemplate = TaskTemplate | { task: "draft_customer_update"; promptVersion: string; systemPrompt: string; renderUserPrompt: (input: unknown) => string };
+
 export class TaskRegistry {
   constructor(
-    private readonly templates: Map<ApprovedTask, TaskTemplate>,
+    private readonly templates: Map<string, AnyTaskTemplate>,
     private readonly toolRegistry?: ToolRegistry
   ) {}
 
@@ -34,7 +36,7 @@ export class TaskRegistry {
     return {
       task: approved,
       enabled: true,
-      template,
+      template: template as TaskTemplate,
       toolId: approved,
       implemented: tool?.implemented ?? true
     };

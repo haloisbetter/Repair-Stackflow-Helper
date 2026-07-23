@@ -17,7 +17,7 @@ const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     category: "drafting",
     executionLocation: "local",
     riskLevel: "medium",
-    implemented: false
+    implemented: true
   },
   {
     toolId: "extract_checkin_fields",

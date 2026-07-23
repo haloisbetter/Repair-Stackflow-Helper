@@ -4,6 +4,7 @@ import type { JobRequest as JobRequestType } from "../contracts/v1/jobs.js";
 import type { HelperIdentity } from "../contracts/v1/pairing.js";
 import { SCHEMA_VERSION } from "../contracts/v1/common.js";
 import type { HelperConfig } from "../config/helper-config.js";
+import { TechnicianNoteInput, CustomerUpdateInput } from "../contracts/v1/jobs.js";
 
 export interface JobValidationContext {
   identity: HelperIdentity;
@@ -50,6 +51,23 @@ export function validateJobRequest(raw: unknown, ctx: JobValidationContext): Job
   }
   if (expiresAt <= now) {
     throw new ProtocolError("request_expired", "Job has expired.", false);
+  }
+
+  // Validate input based on task type
+  if (job.task === 'format_technician_note') {
+    const inputResult = TechnicianNoteInput.safeParse(job.input);
+    if (!inputResult.success) {
+      const issue = inputResult.error.issues[0];
+      const code = issue?.path.join('.').includes('technicianNote') ? 'request_too_large' : 'validation_failed';
+      throw new ProtocolError(code, `Invalid technician-note input: ${issue?.message}`, false);
+    }
+    job.input = inputResult.data;
+  } else if (job.task === 'draft_customer_update') {
+    const inputResult = CustomerUpdateInput.safeParse(job.input);
+    if (!inputResult.success) {
+      throw new ProtocolError('validation_failed', `Invalid customer-update input: ${inputResult.error.issues[0]?.message}`, false);
+    }
+    job.input = inputResult.data;
   }
 
   return job;

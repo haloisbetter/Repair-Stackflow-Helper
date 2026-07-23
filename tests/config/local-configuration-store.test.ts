@@ -140,7 +140,7 @@ describe("FileConfigurationStore", () => {
   it("unimplemented tool cannot be enabled through import", async () => {
     const store = new FileConfigurationStore(testDir);
     const bad = buildValidConfig({
-      toolPolicies: [{ ...defaultToolPolicy, toolId: "draft_customer_update", enabled: true }]
+      toolPolicies: [{ ...defaultToolPolicy, toolId: "send_customer_message", enabled: true }]
     });
     await expect(store.importConfiguration(bad)).rejects.toThrow();
   });
